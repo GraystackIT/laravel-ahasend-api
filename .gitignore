@@ -1,5 +1,5 @@
+# Composer dependencies
 /vendor/
-/node_modules/
-.env
-.phpunit.result.cache
+
+# Composer lock file (optional for libraries)
 composer.lock
