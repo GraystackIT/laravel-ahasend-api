@@ -17,6 +17,17 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | Ahasend Account ID
+    |--------------------------------------------------------------------------
+    |
+    | Your Ahasend account UUID. Find it in your Ahasend dashboard. Required
+    | for all API requests — every endpoint is scoped to an account.
+    |
+    */
+    'account_id' => env('AHASEND_ACCOUNT_ID'),
+
+    /*
+    |--------------------------------------------------------------------------
     | Ahasend API Base URL
     |--------------------------------------------------------------------------
     |
@@ -24,7 +35,7 @@ return [
     | to a staging/sandbox environment.
     |
     */
-    'base_url' => env('AHASEND_BASE_URL', 'https://api.ahasend.com/v1'),
+    'base_url' => env('AHASEND_BASE_URL', 'https://api.ahasend.com/v2'),
 
     /*
     |--------------------------------------------------------------------------

@@ -35,17 +35,20 @@ Set the following variables in your `.env` file:
 
 ```dotenv
 AHASEND_API_KEY=your-api-key
+AHASEND_ACCOUNT_ID=your-account-id
 AHASEND_FROM_ADDRESS=hello@yourdomain.com
 AHASEND_FROM_NAME="Your App"
 
 # Optional
-AHASEND_BASE_URL=https://api.ahasend.com/v1
+AHASEND_BASE_URL=https://api.ahasend.com/v2
 AHASEND_WEBHOOK_SECRET=your-webhook-secret
 AHASEND_STORE_LOGS=true
 AHASEND_STORAGE_DRIVER=database   # "log" or "database"
 AHASEND_RETRY_TIMES=3
 AHASEND_RETRY_DELAY_MS=500
 ```
+
+> **Note:** `AHASEND_ACCOUNT_ID` is required. You can find your account ID in the Ahasend dashboard.
 
 ## Usage
 
@@ -212,21 +215,20 @@ echo $message->status->isTerminal(); // true
 
 ### List messages
 
+Uses cursor-based pagination:
+
 ```php
 $result = $messages->list(
-    page:    1,
-    perPage: 25,
-    status:  MessageStatus::Delivered,
-    from:    '2024-01-01',
-    to:      '2024-01-31',
-    email:   'customer@example.com',
+    limit:  25,           // optional — max results to return
+    after:  'cursor-xyz', // optional — cursor for the next page
+    before: 'cursor-abc', // optional — cursor for the previous page
 );
 
 foreach ($result['data'] as $message) {
     echo $message->id . ': ' . $message->subject;
 }
 
-// $result['meta'] contains pagination info
+// $result['meta'] contains cursor pagination info
 ```
 
 ### Cancel a scheduled message
@@ -253,7 +255,18 @@ class MyController
 ### Create an SMTP credential
 
 ```php
+// Global credential (can send from any domain)
 $credential = $smtp->create('My Application');
+
+// Scoped credential (restricted to specific domains)
+$credential = $smtp->create(
+    name:    'My Application',
+    scope:   'scoped',
+    domains: ['yourdomain.com', 'anotherdomain.com'],
+);
+
+// Sandbox credential (no real emails sent)
+$credential = $smtp->create('Test App', sandbox: true);
 
 // Save the password — the API will not return it again.
 echo $credential->id;       // 'cred-xyz'
@@ -265,8 +278,14 @@ echo $credential->port;     // 587
 
 ### List all SMTP credentials
 
+Uses cursor-based pagination:
+
 ```php
-$credentials = $smtp->list();
+$credentials = $smtp->list(
+    limit:  10,           // optional
+    after:  'cursor-xyz', // optional
+    before: 'cursor-abc', // optional
+);
 
 foreach ($credentials as $cred) {
     echo $cred->id . ': ' . $cred->name;
@@ -293,7 +312,6 @@ Manage the suppression list via `SuppressionService`.
 
 ```php
 use GraystackIT\Ahasend\Services\SuppressionService;
-use GraystackIT\Ahasend\Enums\SuppressionType;
 
 class MyController
 {
@@ -305,28 +323,33 @@ class MyController
 
 ```php
 $suppression = $suppressions->create(
-    email:  'user@example.com',
-    type:   SuppressionType::HardBounce,
-    reason: 'User unknown',
+    email:     'user@example.com',
+    expiresAt: '2026-12-31T00:00:00Z', // RFC3339 datetime — required
+    reason:    'User unknown',          // optional
+    domain:    'example.com',           // optional — restrict to a sending domain
 );
 
-echo $suppression->email;       // 'user@example.com'
-echo $suppression->type->label(); // 'Hard Bounce'
+echo $suppression->email;  // 'user@example.com'
 ```
 
 ### List suppressions
 
+Uses cursor-based pagination:
+
 ```php
 $result = $suppressions->list(
-    page:    1,
-    perPage: 50,
-    type:    SuppressionType::Complaint,
-    email:   'user@example.com',
+    limit:  50,                    // optional
+    after:  'cursor-xyz',          // optional
+    before: 'cursor-abc',          // optional
+    domain: 'example.com',         // optional — filter by sending domain
+    email:  'user@example.com',    // optional — filter by recipient email
 );
 
 foreach ($result['data'] as $suppression) {
-    echo $suppression->email . ' - ' . $suppression->type->value;
+    echo $suppression->email;
 }
+
+// $result['meta'] contains cursor pagination info
 ```
 
 ### Delete a specific suppression
@@ -338,11 +361,7 @@ $suppressions->delete('user@example.com'); // true on success
 ### Delete all suppressions
 
 ```php
-// Delete all suppressions regardless of type
-$suppressions->deleteAll();
-
-// Delete only hard bounces
-$suppressions->deleteAll(SuppressionType::HardBounce);
+$suppressions->deleteAll(); // true on success
 ```
 
 ---
@@ -360,13 +379,15 @@ class MyController
 }
 ```
 
+All date/time parameters use RFC3339 format (e.g. `2024-01-01T00:00:00Z`).
+
 ### Bounce statistics
 
 ```php
 $stats = $reports->bounceStatistics(
-    from:   '2024-01-01',
-    to:     '2024-01-31',
-    domain: 'gmail.com',  // optional
+    fromTime:     '2024-01-01T00:00:00Z', // optional
+    toTime:       '2024-01-31T23:59:59Z', // optional
+    senderDomain: 'gmail.com',             // optional — filter by sending domain
 );
 
 echo $stats->totalSent;        // 1000
@@ -380,9 +401,12 @@ echo $stats->totalBounceRate;  // 7.0
 
 ```php
 $breakdown = $reports->deliverabilityBreakdown(
-    from:   '2024-01-01',
-    to:     '2024-01-31',
-    domain: 'outlook.com',  // optional
+    fromTime:         '2024-01-01T00:00:00Z', // optional
+    toTime:           '2024-01-31T23:59:59Z', // optional
+    senderDomain:     'yourdomain.com',        // optional
+    recipientDomains: 'gmail.com,outlook.com', // optional — comma-separated
+    tags:             'transactional,welcome', // optional — comma-separated
+    groupBy:          'day',                   // optional — hour, day, week, month
 );
 
 echo $breakdown->totalSent;      // 500
@@ -398,9 +422,9 @@ foreach ($breakdown->domains as $domain) {
 
 ```php
 $analytics = $reports->deliveryTimeAnalytics(
-    from:   '2024-01-01',
-    to:     '2024-01-31',
-    domain: 'yahoo.com',  // optional
+    fromTime:     '2024-01-01T00:00:00Z', // optional
+    toTime:       '2024-01-31T23:59:59Z', // optional
+    senderDomain: 'yahoo.com',             // optional
 );
 
 echo $analytics->averageDeliverySeconds; // 45.7

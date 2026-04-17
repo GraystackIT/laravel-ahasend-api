@@ -8,9 +8,6 @@ use GraystackIT\Ahasend\Data\EmailMessage;
 use Saloon\Enums\Method;
 use Saloon\Http\Request;
 
-/**
- * Send a basic plain-text email via the Ahasend API.
- */
 class SendEmailRequest extends Request
 {
     protected Method $method = Method::POST;
@@ -19,7 +16,7 @@ class SendEmailRequest extends Request
 
     public function resolveEndpoint(): string
     {
-        return '/emails/send';
+        return '/messages';
     }
 
     /**
@@ -32,13 +29,10 @@ class SendEmailRequest extends Request
                 'email' => $this->message->fromEmail,
                 'name'  => $this->message->fromName,
             ],
-            'to'      => $this->message->to,
-            'subject' => $this->message->subject,
+            'recipients'   => $this->message->to,
+            'subject'      => $this->message->subject,
+            'text_content' => $this->message->textContent,
         ];
-
-        if ($this->message->textContent !== null) {
-            $payload['text'] = $this->message->textContent;
-        }
 
         if (! empty($this->message->cc)) {
             $payload['cc'] = $this->message->cc;
@@ -46,10 +40,6 @@ class SendEmailRequest extends Request
 
         if (! empty($this->message->bcc)) {
             $payload['bcc'] = $this->message->bcc;
-        }
-
-        if ($this->message->messageId !== null) {
-            $payload['message_id'] = $this->message->messageId;
         }
 
         return $payload;

@@ -28,7 +28,8 @@ abstract class TestCase extends OrchestraTestCase
     protected function defineEnvironment($app): void
     {
         $app['config']->set('ahasend.api_key', 'test-api-key');
-        $app['config']->set('ahasend.base_url', 'https://api.ahasend.com/v1');
+        $app['config']->set('ahasend.account_id', 'test-account-id');
+        $app['config']->set('ahasend.base_url', 'https://api.ahasend.com/v2');
         $app['config']->set('ahasend.from.address', 'from@example.com');
         $app['config']->set('ahasend.from.name', 'Test Sender');
         $app['config']->set('ahasend.store_logs', false);

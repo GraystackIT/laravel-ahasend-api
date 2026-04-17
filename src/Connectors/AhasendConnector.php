@@ -15,28 +15,24 @@ class AhasendConnector extends Connector
 
     public function __construct(
         private readonly string $apiKey,
-        private readonly string $baseUrl = 'https://api.ahasend.com/v1',
+        private readonly string $accountId,
+        private readonly string $baseUrl = 'https://api.ahasend.com/v2',
     ) {}
 
-    /**
-     * Base URL for all Ahasend API requests.
-     */
     public function resolveBaseUrl(): string
     {
-        return rtrim($this->baseUrl, '/');
+        return rtrim($this->baseUrl, '/') . '/accounts/' . $this->accountId;
     }
 
     /**
-     * Headers sent with every request — including API key authentication.
-     *
      * @return array<string, string>
      */
     protected function defaultHeaders(): array
     {
         return [
-            'X-Api-Key'       => $this->apiKey,
-            'Accept'          => 'application/json',
-            'Content-Type'    => 'application/json',
+            'X-Api-Key'    => $this->apiKey,
+            'Accept'       => 'application/json',
+            'Content-Type' => 'application/json',
         ];
     }
 }

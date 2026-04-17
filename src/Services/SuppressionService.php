@@ -6,7 +6,6 @@ namespace GraystackIT\Ahasend\Services;
 
 use GraystackIT\Ahasend\Connectors\AhasendConnector;
 use GraystackIT\Ahasend\Data\Suppression;
-use GraystackIT\Ahasend\Enums\SuppressionType;
 use GraystackIT\Ahasend\Exceptions\AhasendException;
 use GraystackIT\Ahasend\Requests\Suppressions\CreateSuppressionRequest;
 use GraystackIT\Ahasend\Requests\Suppressions\DeleteAllSuppressionsRequest;
@@ -22,17 +21,22 @@ class SuppressionService
     /**
      * Add an email address to the suppression list.
      *
+     * @param  string  $expiresAt  RFC3339 datetime (e.g. "2026-12-31T00:00:00Z")
+     *
      * @throws AhasendException
      */
     public function create(
-        string          $email,
-        SuppressionType $type = SuppressionType::Manual,
-        ?string         $reason = null,
+        string  $email,
+        string  $expiresAt,
+        ?string $reason = null,
+        ?string $domain = null,
     ): Suppression {
-        Log::info('Ahasend: creating suppression', ['email' => $email, 'type' => $type->value]);
+        Log::info('Ahasend: creating suppression', ['email' => $email]);
 
         try {
-            $response    = $this->connector->send(new CreateSuppressionRequest($email, $type, $reason));
+            $response    = $this->connector->send(
+                new CreateSuppressionRequest($email, $expiresAt, $reason, $domain),
+            );
             $suppression = Suppression::fromArray($response->json());
 
             Log::info('Ahasend: suppression created', ['email' => $email]);
@@ -50,22 +54,23 @@ class SuppressionService
     }
 
     /**
-     * List suppressions with optional filters.
+     * List suppressions with optional cursor-based pagination and filters.
      *
      * @return array{data: Suppression[], meta: array<string, mixed>}
      * @throws AhasendException
      */
     public function list(
-        int              $page = 1,
-        int              $perPage = 25,
-        ?SuppressionType $type = null,
-        ?string          $email = null,
+        ?int    $limit = null,
+        ?string $after = null,
+        ?string $before = null,
+        ?string $domain = null,
+        ?string $email = null,
     ): array {
-        Log::info('Ahasend: listing suppressions', compact('page', 'perPage'));
+        Log::info('Ahasend: listing suppressions');
 
         try {
             $response = $this->connector->send(
-                new ListSuppressionsRequest($page, $perPage, $type, $email),
+                new ListSuppressionsRequest($limit, $after, $before, $domain, $email),
             );
 
             $body = $response->json();
@@ -114,23 +119,22 @@ class SuppressionService
     }
 
     /**
-     * Delete all suppressions, optionally filtered by type.
+     * Delete all suppressions.
      *
      * @throws AhasendException
      */
-    public function deleteAll(?SuppressionType $type = null): bool
+    public function deleteAll(): bool
     {
-        Log::info('Ahasend: deleting all suppressions', ['type' => $type?->value ?? 'all']);
+        Log::info('Ahasend: deleting all suppressions');
 
         try {
-            $response = $this->connector->send(new DeleteAllSuppressionsRequest($type));
+            $response = $this->connector->send(new DeleteAllSuppressionsRequest());
 
-            Log::info('Ahasend: all suppressions deleted', ['type' => $type?->value ?? 'all']);
+            Log::info('Ahasend: all suppressions deleted');
 
             return $response->successful();
         } catch (RequestException $e) {
             Log::error('Ahasend: failed to delete all suppressions', [
-                'type'   => $type?->value,
                 'status' => $e->getResponse()->status(),
                 'error'  => $e->getMessage(),
             ]);

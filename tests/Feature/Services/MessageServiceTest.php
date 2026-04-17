@@ -99,7 +99,7 @@ it('lists messages and returns Message DTOs', function (): void {
         ->and($result['meta']['total'])->toBe(2);
 });
 
-it('filters messages by status', function (): void {
+it('filters messages with cursor pagination', function (): void {
     $mockClient = new MockClient([
         ListMessagesRequest::class => MockResponse::make([
             'data' => [],
@@ -111,15 +111,10 @@ it('filters messages by status', function (): void {
     $connector->withMockClient($mockClient);
 
     $service = new MessageService($connector);
-    $result  = $service->list(status: MessageStatus::Bounced);
+    $result  = $service->list(limit: 10, after: 'cursor-abc');
 
     expect($result['data'])->toBeEmpty();
 });
-
-it('throws InvalidArgumentException for invalid page in list', function (): void {
-    $service = new MessageService(app(AhasendConnector::class));
-    $service->list(page: 0);
-})->throws(\InvalidArgumentException::class);
 
 it('throws AhasendException on API error when listing messages', function (): void {
     $mockClient = new MockClient([

@@ -118,7 +118,7 @@ it('returns deliverability breakdown as a typed DTO', function (): void {
     $connector->withMockClient($mockClient);
 
     $service    = new ReportService($connector);
-    $breakdown  = $service->deliverabilityBreakdown('2024-01-01', '2024-01-31');
+    $breakdown  = $service->deliverabilityBreakdown(fromTime: '2024-01-01T00:00:00Z', toTime: '2024-01-31T23:59:59Z');
 
     expect($breakdown)->toBeInstanceOf(DeliverabilityBreakdown::class)
         ->and($breakdown->totalSent)->toBe(500)
@@ -185,7 +185,7 @@ it('filters delivery time analytics by domain', function (): void {
     $connector->withMockClient($mockClient);
 
     $service   = new ReportService($connector);
-    $analytics = $service->deliveryTimeAnalytics(domain: 'outlook.com');
+    $analytics = $service->deliveryTimeAnalytics(senderDomain: 'outlook.com');
 
     expect($analytics->averageDeliverySeconds)->toBe(22.0);
 });

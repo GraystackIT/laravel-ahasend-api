@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 use GraystackIT\Ahasend\Connectors\AhasendConnector;
 use GraystackIT\Ahasend\Data\Suppression;
-use GraystackIT\Ahasend\Enums\SuppressionType;
 use GraystackIT\Ahasend\Exceptions\AhasendException;
 use GraystackIT\Ahasend\Requests\Suppressions\CreateSuppressionRequest;
 use GraystackIT\Ahasend\Requests\Suppressions\DeleteAllSuppressionsRequest;
@@ -26,7 +25,6 @@ it('creates a suppression and returns the DTO', function (): void {
     $mockClient = new MockClient([
         CreateSuppressionRequest::class => MockResponse::make([
             'email'      => 'bounce@example.com',
-            'type'       => 'hard_bounce',
             'reason'     => 'User unknown',
             'created_at' => '2024-01-01T00:00:00Z',
         ], 201),
@@ -36,17 +34,16 @@ it('creates a suppression and returns the DTO', function (): void {
     $connector->withMockClient($mockClient);
 
     $service     = new SuppressionService($connector);
-    $suppression = $service->create('bounce@example.com', SuppressionType::HardBounce, 'User unknown');
+    $suppression = $service->create('bounce@example.com', '2026-12-31T00:00:00Z', 'User unknown');
 
     expect($suppression)->toBeInstanceOf(Suppression::class)
         ->and($suppression->email)->toBe('bounce@example.com')
-        ->and($suppression->type)->toBe(SuppressionType::HardBounce)
         ->and($suppression->reason)->toBe('User unknown');
 });
 
 it('throws InvalidArgumentException for an invalid email in create', function (): void {
     $service = new SuppressionService(app(AhasendConnector::class));
-    $service->create('not-an-email');
+    $service->create('not-an-email', '2026-12-31T00:00:00Z');
 })->throws(\InvalidArgumentException::class);
 
 it('throws AhasendException on API error during suppression create', function (): void {
@@ -58,7 +55,7 @@ it('throws AhasendException on API error during suppression create', function ()
     $connector->withMockClient($mockClient);
 
     $service = new SuppressionService($connector);
-    $service->create('user@example.com');
+    $service->create('user@example.com', '2026-12-31T00:00:00Z');
 })->throws(AhasendException::class);
 
 // ─── list() ───────────────────────────────────────────────────────────────
@@ -67,8 +64,8 @@ it('lists suppressions and returns Suppression DTOs', function (): void {
     $mockClient = new MockClient([
         ListSuppressionsRequest::class => MockResponse::make([
             'data' => [
-                ['email' => 'a@example.com', 'type' => 'hard_bounce'],
-                ['email' => 'b@example.com', 'type' => 'complaint'],
+                ['email' => 'a@example.com'],
+                ['email' => 'b@example.com'],
             ],
             'meta' => ['total' => 2],
         ], 200),
@@ -83,11 +80,10 @@ it('lists suppressions and returns Suppression DTOs', function (): void {
     expect($result['data'])->toHaveCount(2)
         ->and($result['data'][0])->toBeInstanceOf(Suppression::class)
         ->and($result['data'][0]->email)->toBe('a@example.com')
-        ->and($result['data'][1]->type)->toBe(SuppressionType::Complaint)
         ->and($result['meta']['total'])->toBe(2);
 });
 
-it('filters suppressions by type', function (): void {
+it('filters suppressions by domain', function (): void {
     $mockClient = new MockClient([
         ListSuppressionsRequest::class => MockResponse::make([
             'data' => [],
@@ -99,7 +95,7 @@ it('filters suppressions by type', function (): void {
     $connector->withMockClient($mockClient);
 
     $service = new SuppressionService($connector);
-    $result  = $service->list(type: SuppressionType::SoftBounce);
+    $result  = $service->list(domain: 'example.com');
 
     expect($result['data'])->toBeEmpty();
 });
@@ -161,20 +157,6 @@ it('deletes all suppressions', function (): void {
 
     $service = new SuppressionService($connector);
     $result  = $service->deleteAll();
-
-    expect($result)->toBeTrue();
-});
-
-it('deletes all suppressions of a specific type', function (): void {
-    $mockClient = new MockClient([
-        DeleteAllSuppressionsRequest::class => MockResponse::make([], 204),
-    ]);
-
-    $connector = app(AhasendConnector::class);
-    $connector->withMockClient($mockClient);
-
-    $service = new SuppressionService($connector);
-    $result  = $service->deleteAll(SuppressionType::HardBounce);
 
     expect($result)->toBeTrue();
 });

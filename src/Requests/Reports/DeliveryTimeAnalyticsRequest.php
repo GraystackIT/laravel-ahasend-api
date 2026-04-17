@@ -12,9 +12,9 @@ class DeliveryTimeAnalyticsRequest extends Request
     protected Method $method = Method::GET;
 
     public function __construct(
-        private readonly ?string $from = null,
-        private readonly ?string $to = null,
-        private readonly ?string $domain = null,
+        private readonly ?string $fromTime = null,
+        private readonly ?string $toTime = null,
+        private readonly ?string $senderDomain = null,
     ) {}
 
     public function resolveEndpoint(): string
@@ -29,16 +29,16 @@ class DeliveryTimeAnalyticsRequest extends Request
     {
         $query = [];
 
-        if ($this->from !== null) {
-            $query['from'] = $this->from;
+        if ($this->fromTime !== null) {
+            $query['from_time'] = $this->fromTime;
         }
 
-        if ($this->to !== null) {
-            $query['to'] = $this->to;
+        if ($this->toTime !== null) {
+            $query['to_time'] = $this->toTime;
         }
 
-        if ($this->domain !== null) {
-            $query['domain'] = $this->domain;
+        if ($this->senderDomain !== null) {
+            $query['sender_domain'] = $this->senderDomain;
         }
 
         return $query;

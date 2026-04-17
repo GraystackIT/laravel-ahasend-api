@@ -6,7 +6,6 @@ namespace GraystackIT\Ahasend\Services;
 
 use GraystackIT\Ahasend\Connectors\AhasendConnector;
 use GraystackIT\Ahasend\Data\Message;
-use GraystackIT\Ahasend\Enums\MessageStatus;
 use GraystackIT\Ahasend\Exceptions\AhasendException;
 use GraystackIT\Ahasend\Requests\Messages\CancelScheduledMessageRequest;
 use GraystackIT\Ahasend\Requests\Messages\GetMessageRequest;
@@ -43,24 +42,21 @@ class MessageService
     }
 
     /**
-     * List messages with optional filters.
+     * List messages with optional cursor-based pagination.
      *
      * @return array{data: Message[], meta: array<string, mixed>}
      * @throws AhasendException
      */
     public function list(
-        int            $page = 1,
-        int            $perPage = 25,
-        ?MessageStatus $status = null,
-        ?string        $from = null,
-        ?string        $to = null,
-        ?string        $email = null,
+        ?int    $limit = null,
+        ?string $after = null,
+        ?string $before = null,
     ): array {
-        Log::info('Ahasend: listing messages', compact('page', 'perPage', 'status'));
+        Log::info('Ahasend: listing messages', compact('limit', 'after', 'before'));
 
         try {
             $response = $this->connector->send(
-                new ListMessagesRequest($page, $perPage, $status, $from, $to, $email),
+                new ListMessagesRequest($limit, $after, $before),
             );
 
             $body = $response->json();

@@ -22,18 +22,22 @@ class ReportService
     /**
      * Retrieve bounce statistics for the given date range.
      *
+     * @param  string|null  $fromTime     RFC3339 start date-time
+     * @param  string|null  $toTime       RFC3339 end date-time
+     * @param  string|null  $senderDomain Filter by sending domain
+     *
      * @throws AhasendException
      */
     public function bounceStatistics(
-        ?string $from = null,
-        ?string $to = null,
-        ?string $domain = null,
+        ?string $fromTime = null,
+        ?string $toTime = null,
+        ?string $senderDomain = null,
     ): BounceStatistics {
-        Log::info('Ahasend: fetching bounce statistics', compact('from', 'to', 'domain'));
+        Log::info('Ahasend: fetching bounce statistics', compact('fromTime', 'toTime', 'senderDomain'));
 
         try {
             $response = $this->connector->send(
-                new BounceStatisticsRequest($from, $to, $domain),
+                new BounceStatisticsRequest($fromTime, $toTime, $senderDomain),
             );
 
             return BounceStatistics::fromArray($response->json());
@@ -48,20 +52,32 @@ class ReportService
     }
 
     /**
-     * Retrieve deliverability breakdown, optionally by domain.
+     * Retrieve deliverability breakdown statistics.
+     *
+     * @param  string|null  $fromTime         RFC3339 start date-time
+     * @param  string|null  $toTime           RFC3339 end date-time
+     * @param  string|null  $senderDomain     Filter by sending domain
+     * @param  string|null  $recipientDomains Comma-separated recipient domains
+     * @param  string|null  $tags             Comma-separated tag filters
+     * @param  string|null  $groupBy          hour, day, week, or month
      *
      * @throws AhasendException
      */
     public function deliverabilityBreakdown(
-        ?string $from = null,
-        ?string $to = null,
-        ?string $domain = null,
+        ?string $fromTime = null,
+        ?string $toTime = null,
+        ?string $senderDomain = null,
+        ?string $recipientDomains = null,
+        ?string $tags = null,
+        ?string $groupBy = null,
     ): DeliverabilityBreakdown {
-        Log::info('Ahasend: fetching deliverability breakdown', compact('from', 'to', 'domain'));
+        Log::info('Ahasend: fetching deliverability breakdown', compact('fromTime', 'toTime', 'senderDomain'));
 
         try {
             $response = $this->connector->send(
-                new DeliverabilityBreakdownRequest($from, $to, $domain),
+                new DeliverabilityBreakdownRequest(
+                    $fromTime, $toTime, $senderDomain, $recipientDomains, $tags, $groupBy,
+                ),
             );
 
             return DeliverabilityBreakdown::fromArray($response->json());
@@ -76,20 +92,24 @@ class ReportService
     }
 
     /**
-     * Retrieve delivery time analytics to understand send-time performance.
+     * Retrieve delivery time analytics.
+     *
+     * @param  string|null  $fromTime     RFC3339 start date-time
+     * @param  string|null  $toTime       RFC3339 end date-time
+     * @param  string|null  $senderDomain Filter by sending domain
      *
      * @throws AhasendException
      */
     public function deliveryTimeAnalytics(
-        ?string $from = null,
-        ?string $to = null,
-        ?string $domain = null,
+        ?string $fromTime = null,
+        ?string $toTime = null,
+        ?string $senderDomain = null,
     ): DeliveryTimeAnalytics {
-        Log::info('Ahasend: fetching delivery time analytics', compact('from', 'to', 'domain'));
+        Log::info('Ahasend: fetching delivery time analytics', compact('fromTime', 'toTime', 'senderDomain'));
 
         try {
             $response = $this->connector->send(
-                new DeliveryTimeAnalyticsRequest($from, $to, $domain),
+                new DeliveryTimeAnalyticsRequest($fromTime, $toTime, $senderDomain),
             );
 
             return DeliveryTimeAnalytics::fromArray($response->json());

@@ -24,14 +24,22 @@ class SmtpCredentialService
      * The response will include the generated password — store it securely,
      * as the API will not return it again.
      *
+     * @param  array<int, string>  $domains  Required when $scope is "scoped"
+     *
      * @throws AhasendException
      */
-    public function create(string $name): SmtpCredential
-    {
-        Log::info('Ahasend: creating SMTP credential', ['name' => $name]);
+    public function create(
+        string $name,
+        string $scope = 'global',
+        bool   $sandbox = false,
+        array  $domains = [],
+    ): SmtpCredential {
+        Log::info('Ahasend: creating SMTP credential', ['name' => $name, 'scope' => $scope]);
 
         try {
-            $response   = $this->connector->send(new CreateSmtpCredentialRequest($name));
+            $response   = $this->connector->send(
+                new CreateSmtpCredentialRequest($name, $scope, $sandbox, $domains),
+            );
             $credential = SmtpCredential::fromArray($response->json());
 
             Log::info('Ahasend: SMTP credential created', ['id' => $credential->id, 'name' => $name]);
@@ -49,18 +57,23 @@ class SmtpCredentialService
     }
 
     /**
-     * List all SMTP credentials.
+     * List all SMTP credentials with optional cursor-based pagination.
      *
      * @return SmtpCredential[]
      * @throws AhasendException
      */
-    public function list(): array
-    {
+    public function list(
+        ?int    $limit = null,
+        ?string $after = null,
+        ?string $before = null,
+    ): array {
         Log::info('Ahasend: listing SMTP credentials');
 
         try {
-            $response = $this->connector->send(new ListSmtpCredentialsRequest());
-            $body     = $response->json();
+            $response = $this->connector->send(
+                new ListSmtpCredentialsRequest($limit, $after, $before),
+            );
+            $body = $response->json();
 
             return array_map(
                 static fn (array $item): SmtpCredential => SmtpCredential::fromArray($item),

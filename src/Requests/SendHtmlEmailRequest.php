@@ -8,9 +8,6 @@ use GraystackIT\Ahasend\Data\EmailMessage;
 use Saloon\Enums\Method;
 use Saloon\Http\Request;
 
-/**
- * Send an email with both HTML and optional plain-text fallback via the Ahasend API.
- */
 class SendHtmlEmailRequest extends Request
 {
     protected Method $method = Method::POST;
@@ -19,7 +16,7 @@ class SendHtmlEmailRequest extends Request
 
     public function resolveEndpoint(): string
     {
-        return '/emails/send';
+        return '/messages';
     }
 
     /**
@@ -32,14 +29,13 @@ class SendHtmlEmailRequest extends Request
                 'email' => $this->message->fromEmail,
                 'name'  => $this->message->fromName,
             ],
-            'to'      => $this->message->to,
-            'subject' => $this->message->subject,
-            'html'    => $this->message->htmlContent,
+            'recipients'   => $this->message->to,
+            'subject'      => $this->message->subject,
+            'html_content' => $this->message->htmlContent,
         ];
 
-        // Include plain-text fallback when provided.
         if ($this->message->textContent !== null) {
-            $payload['text'] = $this->message->textContent;
+            $payload['text_content'] = $this->message->textContent;
         }
 
         if (! empty($this->message->cc)) {
@@ -48,10 +44,6 @@ class SendHtmlEmailRequest extends Request
 
         if (! empty($this->message->bcc)) {
             $payload['bcc'] = $this->message->bcc;
-        }
-
-        if ($this->message->messageId !== null) {
-            $payload['message_id'] = $this->message->messageId;
         }
 
         return $payload;

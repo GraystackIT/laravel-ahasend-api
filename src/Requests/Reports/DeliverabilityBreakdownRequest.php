@@ -12,14 +12,17 @@ class DeliverabilityBreakdownRequest extends Request
     protected Method $method = Method::GET;
 
     public function __construct(
-        private readonly ?string $from = null,
-        private readonly ?string $to = null,
-        private readonly ?string $domain = null,
+        private readonly ?string $fromTime = null,
+        private readonly ?string $toTime = null,
+        private readonly ?string $senderDomain = null,
+        private readonly ?string $recipientDomains = null,
+        private readonly ?string $tags = null,
+        private readonly ?string $groupBy = null,
     ) {}
 
     public function resolveEndpoint(): string
     {
-        return '/reports/deliverability';
+        return '/statistics/transactional/deliverability';
     }
 
     /**
@@ -29,16 +32,28 @@ class DeliverabilityBreakdownRequest extends Request
     {
         $query = [];
 
-        if ($this->from !== null) {
-            $query['from'] = $this->from;
+        if ($this->fromTime !== null) {
+            $query['from_time'] = $this->fromTime;
         }
 
-        if ($this->to !== null) {
-            $query['to'] = $this->to;
+        if ($this->toTime !== null) {
+            $query['to_time'] = $this->toTime;
         }
 
-        if ($this->domain !== null) {
-            $query['domain'] = $this->domain;
+        if ($this->senderDomain !== null) {
+            $query['sender_domain'] = $this->senderDomain;
+        }
+
+        if ($this->recipientDomains !== null) {
+            $query['recipient_domains'] = $this->recipientDomains;
+        }
+
+        if ($this->tags !== null) {
+            $query['tags'] = $this->tags;
+        }
+
+        if ($this->groupBy !== null) {
+            $query['group_by'] = $this->groupBy;
         }
 
         return $query;

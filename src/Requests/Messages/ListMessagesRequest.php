@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace GraystackIT\Ahasend\Requests\Messages;
 
-use GraystackIT\Ahasend\Enums\MessageStatus;
 use Saloon\Enums\Method;
 use Saloon\Http\Request;
 
@@ -13,21 +12,10 @@ class ListMessagesRequest extends Request
     protected Method $method = Method::GET;
 
     public function __construct(
-        private readonly int            $page = 1,
-        private readonly int            $perPage = 25,
-        private readonly ?MessageStatus $status = null,
-        private readonly ?string        $from = null,
-        private readonly ?string        $to = null,
-        private readonly ?string        $email = null,
-    ) {
-        if ($this->page < 1) {
-            throw new \InvalidArgumentException('Page must be at least 1.');
-        }
-
-        if ($this->perPage < 1 || $this->perPage > 100) {
-            throw new \InvalidArgumentException('Per-page must be between 1 and 100.');
-        }
-    }
+        private readonly ?int    $limit = null,
+        private readonly ?string $after = null,
+        private readonly ?string $before = null,
+    ) {}
 
     public function resolveEndpoint(): string
     {
@@ -39,25 +27,18 @@ class ListMessagesRequest extends Request
      */
     protected function defaultQuery(): array
     {
-        $query = [
-            'page'     => $this->page,
-            'per_page' => $this->perPage,
-        ];
+        $query = [];
 
-        if ($this->status !== null) {
-            $query['status'] = $this->status->value;
+        if ($this->limit !== null) {
+            $query['limit'] = $this->limit;
         }
 
-        if ($this->from !== null) {
-            $query['from'] = $this->from;
+        if ($this->after !== null) {
+            $query['after'] = $this->after;
         }
 
-        if ($this->to !== null) {
-            $query['to'] = $this->to;
-        }
-
-        if ($this->email !== null) {
-            $query['email'] = $this->email;
+        if ($this->before !== null) {
+            $query['before'] = $this->before;
         }
 
         return $query;

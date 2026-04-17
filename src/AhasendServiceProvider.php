@@ -22,8 +22,9 @@ class AhasendServiceProvider extends ServiceProvider
 
         // Bind the Saloon connector as a singleton.
         $this->app->singleton(AhasendConnector::class, function (): AhasendConnector {
-            $apiKey  = config('ahasend.api_key');
-            $baseUrl = config('ahasend.base_url', 'https://api.ahasend.com/v1');
+            $apiKey    = config('ahasend.api_key');
+            $accountId = config('ahasend.account_id');
+            $baseUrl   = config('ahasend.base_url', 'https://api.ahasend.com/v2');
 
             if (empty($apiKey)) {
                 throw new \RuntimeException(
@@ -31,7 +32,13 @@ class AhasendServiceProvider extends ServiceProvider
                 );
             }
 
-            return new AhasendConnector((string) $apiKey, (string) $baseUrl);
+            if (empty($accountId)) {
+                throw new \RuntimeException(
+                    'Ahasend account ID is not set. Define AHASEND_ACCOUNT_ID in your .env file.'
+                );
+            }
+
+            return new AhasendConnector((string) $apiKey, (string) $accountId, (string) $baseUrl);
         });
 
         // Bind the service — depends on the connector singleton above.

@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace GraystackIT\Ahasend\Requests\Suppressions;
 
-use GraystackIT\Ahasend\Enums\SuppressionType;
 use Saloon\Enums\Method;
 use Saloon\Http\Request;
 
@@ -13,19 +12,12 @@ class ListSuppressionsRequest extends Request
     protected Method $method = Method::GET;
 
     public function __construct(
-        private readonly int               $page = 1,
-        private readonly int               $perPage = 25,
-        private readonly ?SuppressionType  $type = null,
-        private readonly ?string           $email = null,
-    ) {
-        if ($this->page < 1) {
-            throw new \InvalidArgumentException('Page must be at least 1.');
-        }
-
-        if ($this->perPage < 1 || $this->perPage > 100) {
-            throw new \InvalidArgumentException('Per-page must be between 1 and 100.');
-        }
-    }
+        private readonly ?int    $limit = null,
+        private readonly ?string $after = null,
+        private readonly ?string $before = null,
+        private readonly ?string $domain = null,
+        private readonly ?string $email = null,
+    ) {}
 
     public function resolveEndpoint(): string
     {
@@ -37,13 +29,22 @@ class ListSuppressionsRequest extends Request
      */
     protected function defaultQuery(): array
     {
-        $query = [
-            'page'     => $this->page,
-            'per_page' => $this->perPage,
-        ];
+        $query = [];
 
-        if ($this->type !== null) {
-            $query['type'] = $this->type->value;
+        if ($this->limit !== null) {
+            $query['limit'] = $this->limit;
+        }
+
+        if ($this->after !== null) {
+            $query['after'] = $this->after;
+        }
+
+        if ($this->before !== null) {
+            $query['before'] = $this->before;
+        }
+
+        if ($this->domain !== null) {
+            $query['domain'] = $this->domain;
         }
 
         if ($this->email !== null) {
