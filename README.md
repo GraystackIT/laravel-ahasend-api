@@ -183,6 +183,255 @@ class OrderShipped extends Mailable
 }
 ```
 
+---
+
+## Messages
+
+Retrieve and manage sent or scheduled messages via `MessageService`.
+
+```php
+use GraystackIT\Ahasend\Services\MessageService;
+use GraystackIT\Ahasend\Enums\MessageStatus;
+
+class MyController
+{
+    public function __construct(private readonly MessageService $messages) {}
+}
+```
+
+### Get a single message
+
+```php
+$message = $messages->get('msg-abc123');
+
+echo $message->id;          // 'msg-abc123'
+echo $message->subject;     // 'Hello World'
+echo $message->status->value; // 'delivered'
+echo $message->status->isTerminal(); // true
+```
+
+### List messages
+
+```php
+$result = $messages->list(
+    page:    1,
+    perPage: 25,
+    status:  MessageStatus::Delivered,
+    from:    '2024-01-01',
+    to:      '2024-01-31',
+    email:   'customer@example.com',
+);
+
+foreach ($result['data'] as $message) {
+    echo $message->id . ': ' . $message->subject;
+}
+
+// $result['meta'] contains pagination info
+```
+
+### Cancel a scheduled message
+
+```php
+$cancelled = $messages->cancel('msg-scheduled-001'); // true on success
+```
+
+---
+
+## SMTP Credentials
+
+Manage programmatic SMTP credentials via `SmtpCredentialService`.
+
+```php
+use GraystackIT\Ahasend\Services\SmtpCredentialService;
+
+class MyController
+{
+    public function __construct(private readonly SmtpCredentialService $smtp) {}
+}
+```
+
+### Create an SMTP credential
+
+```php
+$credential = $smtp->create('My Application');
+
+// Save the password — the API will not return it again.
+echo $credential->id;       // 'cred-xyz'
+echo $credential->username; // 'smtp_my_application'
+echo $credential->password; // 'generated-secret' (only available on create)
+echo $credential->host;     // 'smtp.ahasend.com'
+echo $credential->port;     // 587
+```
+
+### List all SMTP credentials
+
+```php
+$credentials = $smtp->list();
+
+foreach ($credentials as $cred) {
+    echo $cred->id . ': ' . $cred->name;
+}
+```
+
+### Get a single SMTP credential
+
+```php
+$credential = $smtp->get('cred-xyz');
+```
+
+### Delete an SMTP credential
+
+```php
+$smtp->delete('cred-xyz'); // true on success
+```
+
+---
+
+## Suppressions
+
+Manage the suppression list via `SuppressionService`.
+
+```php
+use GraystackIT\Ahasend\Services\SuppressionService;
+use GraystackIT\Ahasend\Enums\SuppressionType;
+
+class MyController
+{
+    public function __construct(private readonly SuppressionService $suppressions) {}
+}
+```
+
+### Add a suppression
+
+```php
+$suppression = $suppressions->create(
+    email:  'user@example.com',
+    type:   SuppressionType::HardBounce,
+    reason: 'User unknown',
+);
+
+echo $suppression->email;       // 'user@example.com'
+echo $suppression->type->label(); // 'Hard Bounce'
+```
+
+### List suppressions
+
+```php
+$result = $suppressions->list(
+    page:    1,
+    perPage: 50,
+    type:    SuppressionType::Complaint,
+    email:   'user@example.com',
+);
+
+foreach ($result['data'] as $suppression) {
+    echo $suppression->email . ' - ' . $suppression->type->value;
+}
+```
+
+### Delete a specific suppression
+
+```php
+$suppressions->delete('user@example.com'); // true on success
+```
+
+### Delete all suppressions
+
+```php
+// Delete all suppressions regardless of type
+$suppressions->deleteAll();
+
+// Delete only hard bounces
+$suppressions->deleteAll(SuppressionType::HardBounce);
+```
+
+---
+
+## Reports
+
+Retrieve analytics data via `ReportService`.
+
+```php
+use GraystackIT\Ahasend\Services\ReportService;
+
+class MyController
+{
+    public function __construct(private readonly ReportService $reports) {}
+}
+```
+
+### Bounce statistics
+
+```php
+$stats = $reports->bounceStatistics(
+    from:   '2024-01-01',
+    to:     '2024-01-31',
+    domain: 'gmail.com',  // optional
+);
+
+echo $stats->totalSent;        // 1000
+echo $stats->hardBounces;      // 50
+echo $stats->softBounces;      // 20
+echo $stats->hardBounceRate;   // 5.0  (percent)
+echo $stats->totalBounceRate;  // 7.0
+```
+
+### Deliverability breakdown
+
+```php
+$breakdown = $reports->deliverabilityBreakdown(
+    from:   '2024-01-01',
+    to:     '2024-01-31',
+    domain: 'outlook.com',  // optional
+);
+
+echo $breakdown->totalSent;      // 500
+echo $breakdown->totalDelivered; // 480
+echo $breakdown->deliveryRate;   // 96.0
+
+foreach ($breakdown->domains as $domain) {
+    echo $domain['domain'] . ': ' . $domain['rate'] . '%';
+}
+```
+
+### Delivery time analytics
+
+```php
+$analytics = $reports->deliveryTimeAnalytics(
+    from:   '2024-01-01',
+    to:     '2024-01-31',
+    domain: 'yahoo.com',  // optional
+);
+
+echo $analytics->averageDeliverySeconds; // 45.7
+echo $analytics->medianDeliverySeconds;  // 30.0
+echo $analytics->totalDelivered;         // 900
+
+// Breakdown by hour-of-day and calendar day
+foreach ($analytics->byHour as $hour) {
+    echo "Hour {$hour['hour']}: {$hour['avg_delivery_seconds']}s avg";
+}
+```
+
+---
+
+## Error handling
+
+All service methods throw `AhasendException` on API errors. The exception wraps the Saloon `RequestException` and exposes the HTTP status code.
+
+```php
+use GraystackIT\Ahasend\Exceptions\AhasendException;
+
+try {
+    $messages->get('nonexistent-id');
+} catch (AhasendException $e) {
+    echo $e->getCode();    // 404
+    echo $e->getMessage(); // "Ahasend API error [404]: ..."
+}
+```
+
+---
+
 ## Testing
 
 ```bash

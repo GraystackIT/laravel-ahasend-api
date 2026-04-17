@@ -5,6 +5,10 @@ declare(strict_types=1);
 namespace GraystackIT\Ahasend;
 
 use GraystackIT\Ahasend\Connectors\AhasendConnector;
+use GraystackIT\Ahasend\Services\MessageService;
+use GraystackIT\Ahasend\Services\ReportService;
+use GraystackIT\Ahasend\Services\SmtpCredentialService;
+use GraystackIT\Ahasend\Services\SuppressionService;
 use Illuminate\Support\ServiceProvider;
 
 class AhasendServiceProvider extends ServiceProvider
@@ -33,6 +37,22 @@ class AhasendServiceProvider extends ServiceProvider
         // Bind the service — depends on the connector singleton above.
         $this->app->singleton(AhasendService::class, function (): AhasendService {
             return new AhasendService($this->app->make(AhasendConnector::class));
+        });
+
+        $this->app->singleton(MessageService::class, function (): MessageService {
+            return new MessageService($this->app->make(AhasendConnector::class));
+        });
+
+        $this->app->singleton(SmtpCredentialService::class, function (): SmtpCredentialService {
+            return new SmtpCredentialService($this->app->make(AhasendConnector::class));
+        });
+
+        $this->app->singleton(SuppressionService::class, function (): SuppressionService {
+            return new SuppressionService($this->app->make(AhasendConnector::class));
+        });
+
+        $this->app->singleton(ReportService::class, function (): ReportService {
+            return new ReportService($this->app->make(AhasendConnector::class));
         });
     }
 
