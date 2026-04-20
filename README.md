@@ -5,7 +5,7 @@ A production-ready Laravel package for the [Ahasend](https://ahasend.com) transa
 ## Requirements
 
 - PHP 8.2+
-- Laravel 10 / 11 / 12
+- Laravel 10 / 11 / 12 / 13
 - Saloon 4.x
 
 ## Installation
