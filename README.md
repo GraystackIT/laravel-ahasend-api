@@ -7,6 +7,7 @@ A production-ready Laravel package for the [Ahasend](https://ahasend.com) transa
 - PHP 8.3+
 - Laravel 11, 12, or 13
 - Saloon 4.x
+- Symfony Mailer 6.4 / 7.x (bundled with Laravel)
 
 ## Installation
 
@@ -163,6 +164,118 @@ Event::listen(MailDelivered::class, function (MailDelivered $event): void {
     // $event->messageId, $event->recipient, $event->payload
 });
 ```
+
+## Laravel Mail driver
+
+The package registers a native Laravel mail transport driver so you can send any standard Laravel `Mailable` through AhaSend without touching your existing Mailable code.
+
+### 1. Configure the mailer
+
+Add an `ahasend` entry to the `mailers` array in `config/mail.php`:
+
+```php
+// config/mail.php
+'mailers' => [
+    // ... other mailers ...
+
+    'ahasend' => [
+        'transport' => 'ahasend',
+    ],
+],
+```
+
+The transport reads API credentials and sender defaults from the `ahasend` config (i.e. the same `AHASEND_*` variables you already set).
+
+To make AhaSend the **default** mailer, update your `.env`:
+
+```dotenv
+MAIL_MAILER=ahasend
+```
+
+### 2. Send a Mailable
+
+```php
+use App\Mail\OrderShipped;
+use Illuminate\Support\Facades\Mail;
+
+// Uses the default mailer if MAIL_MAILER=ahasend
+Mail::to('customer@example.com')->send(new OrderShipped($order));
+
+// Or target the driver explicitly
+Mail::mailer('ahasend')
+    ->to('customer@example.com')
+    ->cc('manager@example.com')
+    ->send(new OrderShipped($order));
+```
+
+### 3. Example Mailable
+
+```php
+<?php
+
+namespace App\Mail;
+
+use Illuminate\Mail\Mailable;
+use Illuminate\Mail\Mailables\Content;
+use Illuminate\Mail\Mailables\Envelope;
+
+class OrderShipped extends Mailable
+{
+    public function __construct(public readonly Order $order) {}
+
+    public function envelope(): Envelope
+    {
+        return new Envelope(subject: 'Your order has shipped');
+    }
+
+    public function content(): Content
+    {
+        return new Content(
+            html: 'emails.order-shipped',   // resources/views/emails/order-shipped.blade.php
+            text: 'emails.order-shipped-text',
+        );
+    }
+
+    public function attachments(): array
+    {
+        return [
+            Attachment::fromPath(storage_path("invoices/{$this->order->id}.pdf"))
+                ->as('invoice.pdf')
+                ->withMime('application/pdf'),
+        ];
+    }
+}
+```
+
+### 4. Required `.env` variables
+
+```dotenv
+AHASEND_API_KEY=your-api-key
+AHASEND_ACCOUNT_ID=your-account-id
+AHASEND_FROM_ADDRESS=hello@yourdomain.com
+AHASEND_FROM_NAME="Your App"
+
+# Make AhaSend the default mailer
+MAIL_MAILER=ahasend
+```
+
+### Supported features
+
+| Feature | Supported |
+|---|---|
+| HTML body | Yes |
+| Plain-text body | Yes |
+| Multiple `To` recipients | Yes |
+| CC | Yes |
+| BCC | Yes |
+| File attachments | Yes (auto base64 encoded) |
+| From address / name | Yes (from Mailable or config fallback) |
+
+### Transport internals
+
+The driver is implemented as `GraystackIT\Ahasend\Mail\AhaSendTransport`, which extends Symfony's `AbstractTransport`. It converts the Symfony `Email` object into the `EmailMessage` DTO used by `AhasendService::send()`, preserving all recipients, headers, and attachments. Errors thrown by `AhasendService` are re-wrapped as Symfony `TransportException` so Laravel's mail system handles them consistently.
+
+---
 
 ## Mailable tracking
 

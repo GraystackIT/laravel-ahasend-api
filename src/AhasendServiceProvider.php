@@ -5,10 +5,12 @@ declare(strict_types=1);
 namespace GraystackIT\Ahasend;
 
 use GraystackIT\Ahasend\Connectors\AhasendConnector;
+use GraystackIT\Ahasend\Mail\AhaSendTransport;
 use GraystackIT\Ahasend\Services\MessageService;
 use GraystackIT\Ahasend\Services\ReportService;
 use GraystackIT\Ahasend\Services\SmtpCredentialService;
 use GraystackIT\Ahasend\Services\SuppressionService;
+use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\ServiceProvider;
 
 class AhasendServiceProvider extends ServiceProvider
@@ -82,5 +84,10 @@ class AhasendServiceProvider extends ServiceProvider
 
         // Register webhook route (excluded from CSRF middleware by default).
         $this->loadRoutesFrom(__DIR__ . '/../routes/webhooks.php');
+
+        // Register the 'ahasend' Laravel mail transport driver.
+        Mail::extend('ahasend', function () {
+            return new AhaSendTransport($this->app->make(AhasendService::class));
+        });
     }
 }
