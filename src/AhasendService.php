@@ -9,6 +9,7 @@ use GraystackIT\Ahasend\Data\EmailMessage;
 use GraystackIT\Ahasend\Events\MailSent;
 use GraystackIT\Ahasend\Exceptions\AhasendException;
 use GraystackIT\Ahasend\Models\AhasendMessage;
+use GraystackIT\Ahasend\Requests\SendConversationalEmailRequest;
 use GraystackIT\Ahasend\Requests\SendEmailRequest;
 use GraystackIT\Ahasend\Requests\SendEmailWithAttachmentsRequest;
 use GraystackIT\Ahasend\Requests\SendHtmlEmailRequest;
@@ -183,9 +184,14 @@ class AhasendService
 
     /**
      * Pick the correct Saloon request class based on message contents.
+     * Messages with CC/BCC must use the conversational endpoint.
      */
-    private function resolveRequest(EmailMessage $message): SendEmailRequest|SendHtmlEmailRequest|SendEmailWithAttachmentsRequest
+    private function resolveRequest(EmailMessage $message): SendEmailRequest|SendHtmlEmailRequest|SendEmailWithAttachmentsRequest|SendConversationalEmailRequest
     {
+        if (! empty($message->cc) || ! empty($message->bcc)) {
+            return new SendConversationalEmailRequest($message);
+        }
+
         if (! empty($message->attachments)) {
             return new SendEmailWithAttachmentsRequest($message);
         }

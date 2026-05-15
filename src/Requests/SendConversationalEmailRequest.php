@@ -9,7 +9,7 @@ use GraystackIT\Ahasend\Exceptions\AhasendException;
 use Saloon\Enums\Method;
 use Saloon\Http\Request;
 
-class SendEmailWithAttachmentsRequest extends Request
+class SendConversationalEmailRequest extends Request
 {
     protected Method $method = Method::POST;
 
@@ -17,7 +17,7 @@ class SendEmailWithAttachmentsRequest extends Request
 
     public function resolveEndpoint(): string
     {
-        return '/messages';
+        return '/messages/conversation';
     }
 
     /**
@@ -30,9 +30,8 @@ class SendEmailWithAttachmentsRequest extends Request
                 'email' => $this->message->fromEmail,
                 'name'  => $this->message->fromName,
             ],
-            'recipients'  => $this->message->to,
-            'subject'     => $this->message->subject,
-            'attachments' => $this->buildAttachments(),
+            'recipients' => $this->message->to,
+            'subject'    => $this->message->subject,
         ];
 
         if ($this->message->htmlContent !== null) {
@@ -51,11 +50,15 @@ class SendEmailWithAttachmentsRequest extends Request
             $payload['bcc'] = $this->message->bcc;
         }
 
+        if (! empty($this->message->attachments)) {
+            $payload['attachments'] = $this->buildAttachments();
+        }
+
         return $payload;
     }
 
     /**
-     * @return array<int, array<string, string>>
+     * @return array<int, array<string, mixed>>
      */
     private function buildAttachments(): array
     {
@@ -69,22 +72,22 @@ class SendEmailWithAttachmentsRequest extends Request
                     throw AhasendException::make("Attachment file not found or unreadable: {$path}");
                 }
 
-                $content  = base64_encode((string) file_get_contents($path));
-                $mimeType = $attachment['mime_type'] ?? mime_content_type($path) ?: 'application/octet-stream';
-                $name     = $attachment['name'] ?? basename($path);
+                $content     = base64_encode((string) file_get_contents($path));
+                $contentType = $attachment['mime_type'] ?? mime_content_type($path) ?: 'application/octet-stream';
+                $fileName    = $attachment['name'] ?? basename($path);
             } else {
-                $rawContent = $attachment['content'] ?? '';
-                $content    = base64_encode(base64_decode($rawContent, strict: true) !== false
+                $rawContent  = $attachment['content'] ?? '';
+                $content     = base64_encode(base64_decode($rawContent, strict: true) !== false
                     ? base64_decode($rawContent)
                     : $rawContent);
-                $mimeType = $attachment['mime_type'] ?? 'application/octet-stream';
-                $name     = $attachment['name'] ?? 'attachment';
+                $contentType = $attachment['mime_type'] ?? 'application/octet-stream';
+                $fileName    = $attachment['name'] ?? 'attachment';
             }
 
             $built[] = [
-                'file_name'    => $name,
+                'file_name'    => $fileName,
                 'data'         => $content,
-                'content_type' => $mimeType,
+                'content_type' => $contentType,
                 'base64'       => true,
             ];
         }

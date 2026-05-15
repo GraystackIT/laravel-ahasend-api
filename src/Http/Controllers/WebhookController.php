@@ -35,9 +35,12 @@ class WebhookController extends Controller
         /** @var array<string, mixed> $payload */
         $payload = $request->json()->all();
 
-        $event     = (string) ($payload['event'] ?? '');
-        $messageId = (string) ($payload['message_id'] ?? '');
-        $recipient = (string) ($payload['recipient'] ?? $payload['email'] ?? '');
+        // Standard Webhooks format: { type, timestamp, data: { ... } }
+        $event = (string) ($payload['type'] ?? '');
+        /** @var array<string, mixed> $data */
+        $data      = (array) ($payload['data'] ?? $payload);
+        $messageId = (string) ($data['id'] ?? $data['message_id'] ?? '');
+        $recipient = (string) ($data['recipient'] ?? $data['email'] ?? '');
 
         Log::info('Ahasend webhook received', [
             'event'      => $event,
@@ -45,35 +48,46 @@ class WebhookController extends Controller
             'recipient'  => $recipient,
         ]);
 
-        $this->persistStatusUpdate($messageId, $event, $payload);
-        $this->dispatchEvent($event, $messageId, $recipient, $payload);
+        $this->persistStatusUpdate($messageId, $event, $data);
+        $this->dispatchEvent($event, $messageId, $recipient, $data);
 
         return response()->json(['status' => 'ok']);
     }
 
     /**
-     * Verify the Ahasend webhook signature when a secret is configured.
+     * Verify the webhook signature using Standard Webhooks format.
      *
-     * Ahasend signs the raw body with HMAC-SHA256 and sends the signature
-     * in the `X-Ahasend-Signature` header.
+     * The signed content is "{webhook-id}.{webhook-timestamp}.{raw-body}".
+     * The `webhook-signature` header contains one or more space-separated
+     * "v1,{base64}" signatures; any matching signature is accepted.
      */
     private function verifySignature(Request $request): bool
     {
         $secret = config('ahasend.webhook.secret');
 
         if ($secret === null || $secret === '') {
-            return true; // Signature verification disabled.
+            return true;
         }
 
-        $signature = $request->header('X-Ahasend-Signature', '');
+        $msgId        = (string) $request->header('webhook-id', '');
+        $msgTimestamp = (string) $request->header('webhook-timestamp', '');
+        $sigHeader    = (string) $request->header('webhook-signature', '');
 
-        if ($signature === '') {
+        if ($msgId === '' || $msgTimestamp === '' || $sigHeader === '') {
             return false;
         }
 
-        $expected = hash_hmac('sha256', $request->getContent(), $secret);
+        $signed   = "{$msgId}.{$msgTimestamp}.{$request->getContent()}";
+        $expected = base64_encode(hash_hmac('sha256', $signed, $secret, true));
 
-        return hash_equals($expected, $signature);
+        foreach (explode(' ', $sigHeader) as $part) {
+            $parts = explode(',', $part, 2);
+            if (count($parts) === 2 && hash_equals($expected, $parts[1])) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     /**
@@ -98,11 +112,11 @@ class WebhookController extends Controller
         }
 
         $status = match ($event) {
-            'delivered' => 'delivered',
-            'opened'    => 'opened',
-            'failed'    => 'failed',
-            'bounced'   => 'bounced',
-            default     => $event,
+            'message.delivered' => 'delivered',
+            'message.opened'    => 'opened',
+            'message.failed'    => 'failed',
+            'message.bounced'   => 'bounced',
+            default             => $event,
         };
 
         AhasendMessage::where('message_id', $messageId)
@@ -117,21 +131,21 @@ class WebhookController extends Controller
     private function dispatchEvent(string $event, string $messageId, string $recipient, array $payload): void
     {
         match ($event) {
-            'delivered' => MailDelivered::dispatch($messageId, $recipient, $payload),
-            'opened'    => MailOpened::dispatch($messageId, $recipient, $payload),
-            'failed'    => MailFailed::dispatch(
+            'message.delivered' => MailDelivered::dispatch($messageId, $recipient, $payload),
+            'message.opened'    => MailOpened::dispatch($messageId, $recipient, $payload),
+            'message.failed'    => MailFailed::dispatch(
                 $messageId,
                 $recipient,
                 $payload['reason'] ?? null,
                 $payload,
             ),
-            'bounced'   => MailBounced::dispatch(
+            'message.bounced'   => MailBounced::dispatch(
                 $messageId,
                 $recipient,
                 $payload['bounce_type'] ?? null,
                 $payload,
             ),
-            default     => Log::debug("Ahasend webhook: unhandled event [{$event}]"),
+            default             => Log::debug("Ahasend webhook: unhandled event [{$event}]"),
         };
     }
 }

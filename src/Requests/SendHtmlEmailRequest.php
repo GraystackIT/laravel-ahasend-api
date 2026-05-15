@@ -38,14 +38,6 @@ class SendHtmlEmailRequest extends Request
             $payload['text_content'] = $this->message->textContent;
         }
 
-        if (! empty($this->message->cc)) {
-            $payload['cc'] = $this->message->cc;
-        }
-
-        if (! empty($this->message->bcc)) {
-            $payload['bcc'] = $this->message->bcc;
-        }
-
         return $payload;
     }
 }

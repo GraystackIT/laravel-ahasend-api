@@ -9,7 +9,7 @@ use Saloon\Http\Request;
 
 class CancelScheduledMessageRequest extends Request
 {
-    protected Method $method = Method::POST;
+    protected Method $method = Method::DELETE;
 
     public function __construct(private readonly string $messageId)
     {

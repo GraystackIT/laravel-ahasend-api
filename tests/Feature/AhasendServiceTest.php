@@ -7,6 +7,7 @@ use GraystackIT\Ahasend\Connectors\AhasendConnector;
 use GraystackIT\Ahasend\Data\EmailMessage;
 use GraystackIT\Ahasend\Events\MailSent;
 use GraystackIT\Ahasend\Exceptions\AhasendException;
+use GraystackIT\Ahasend\Requests\SendConversationalEmailRequest;
 use GraystackIT\Ahasend\Requests\SendEmailRequest;
 use GraystackIT\Ahasend\Requests\SendEmailWithAttachmentsRequest;
 use GraystackIT\Ahasend\Requests\SendHtmlEmailRequest;
@@ -107,6 +108,56 @@ it('sends an email with attachments and selects SendEmailWithAttachmentsRequest'
     );
 
     expect($ahasendId)->toBe('attach-msg-003');
+});
+
+it('routes to SendConversationalEmailRequest when CC is present', function (): void {
+    Event::fake([MailSent::class]);
+
+    $mockClient = new MockClient([
+        SendConversationalEmailRequest::class => MockResponse::make(
+            ['message_id' => 'conv-msg-004'],
+            200,
+        ),
+    ]);
+
+    $connector = app(AhasendConnector::class);
+    $connector->withMockClient($mockClient);
+
+    $service = new AhasendService($connector);
+
+    $ahasendId = $service->sendHtml(
+        to:          [['email' => 'to@example.com']],
+        subject:     'CC Test',
+        htmlContent: '<p>Hello</p>',
+        cc:          [['email' => 'cc@example.com']],
+    );
+
+    expect($ahasendId)->toBe('conv-msg-004');
+});
+
+it('routes to SendConversationalEmailRequest when BCC is present', function (): void {
+    Event::fake([MailSent::class]);
+
+    $mockClient = new MockClient([
+        SendConversationalEmailRequest::class => MockResponse::make(
+            ['message_id' => 'conv-msg-005'],
+            200,
+        ),
+    ]);
+
+    $connector = app(AhasendConnector::class);
+    $connector->withMockClient($mockClient);
+
+    $service = new AhasendService($connector);
+
+    $ahasendId = $service->sendText(
+        to:          [['email' => 'to@example.com']],
+        subject:     'BCC Test',
+        textContent: 'Hello',
+        bcc:         [['email' => 'bcc@example.com']],
+    );
+
+    expect($ahasendId)->toBe('conv-msg-005');
 });
 
 // ─── Auto-generated message_id ────────────────────────────────────────────

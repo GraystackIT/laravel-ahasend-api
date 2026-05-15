@@ -111,7 +111,7 @@ $mailer->sendWithAttachments(
 
 ### CC / BCC
 
-Pass `cc` and `bcc` arrays to any convenience method:
+Pass `cc` and `bcc` arrays to any convenience method. When CC or BCC recipients are present the package automatically routes the request to the Ahasend conversational endpoint (`POST /messages/conversation`), which is the only endpoint that supports those fields:
 
 ```php
 $mailer->sendHtml(
@@ -151,10 +151,10 @@ The path is configurable via `AHASEND_WEBHOOK_PATH`. Incoming events fire Larave
 
 | Ahasend event | Laravel event |
 |---|---|
-| `delivered` | `MailDelivered` |
-| `opened` | `MailOpened` |
-| `failed` | `MailFailed` |
-| `bounced` | `MailBounced` |
+| `message.delivered` | `MailDelivered` |
+| `message.opened` | `MailOpened` |
+| `message.failed` | `MailFailed` |
+| `message.bounced` | `MailBounced` |
 
 ### Listening to events
 

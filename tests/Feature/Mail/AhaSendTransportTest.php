@@ -7,6 +7,7 @@ use GraystackIT\Ahasend\Connectors\AhasendConnector;
 use GraystackIT\Ahasend\Data\EmailMessage;
 use GraystackIT\Ahasend\Exceptions\AhasendException;
 use GraystackIT\Ahasend\Mail\AhaSendTransport;
+use GraystackIT\Ahasend\Requests\SendConversationalEmailRequest;
 use GraystackIT\Ahasend\Requests\SendEmailRequest;
 use GraystackIT\Ahasend\Requests\SendEmailWithAttachmentsRequest;
 use GraystackIT\Ahasend\Requests\SendHtmlEmailRequest;
@@ -85,30 +86,11 @@ it('sends a plain-text email through the transport', function (): void {
 
 // ─── CC / BCC ─────────────────────────────────────────────────────────────────
 
-it('correctly maps CC and BCC addresses', function (): void {
+it('correctly maps CC and BCC addresses via the conversational endpoint', function (): void {
     $mockClient = new MockClient([
-        SendHtmlEmailRequest::class => MockResponse::make(['message_id' => 'cc-bcc-001'], 200),
+        SendConversationalEmailRequest::class => MockResponse::make(['message_id' => 'cc-bcc-001'], 200),
     ]);
 
-    $capturedMessage = null;
-
-    $connector  = app(AhasendConnector::class);
-    $connector->withMockClient($mockClient);
-
-    $serviceSpy = new class(new AhasendService($connector)) {
-        public ?EmailMessage $captured = null;
-
-        public function __construct(private readonly AhasendService $inner) {}
-
-        public function send(EmailMessage $message): string
-        {
-            $this->captured = $message;
-
-            return $this->inner->send($message);
-        }
-    };
-
-    // Use a real service but capture via closure spy on MockClient assertion.
     $transport = makeTransport($mockClient);
 
     $email = (new Email())
@@ -121,7 +103,7 @@ it('correctly maps CC and BCC addresses', function (): void {
 
     sendViaTransport($transport, $email);
 
-    $mockClient->assertSent(SendHtmlEmailRequest::class, function (SendHtmlEmailRequest $request) {
+    $mockClient->assertSent(SendConversationalEmailRequest::class, function (SendConversationalEmailRequest $request) {
         $body = $request->body()->all();
 
         expect($body['cc'])->toContain(['email' => 'cc@example.com', 'name' => 'CC Person'])
@@ -188,9 +170,10 @@ it('encodes attachments as base64 and selects the attachments request', function
             $attachment = $request->body()->all()['attachments'][0] ?? null;
 
             expect($attachment)->not->toBeNull()
-                ->and($attachment['name'])->toBe('hello.txt')
-                ->and($attachment['mime_type'])->toBe('text/plain')
-                ->and(base64_decode($attachment['content']))->toBe($content);
+                ->and($attachment['file_name'])->toBe('hello.txt')
+                ->and($attachment['content_type'])->toBe('text/plain')
+                ->and($attachment['base64'])->toBeTrue()
+                ->and(base64_decode($attachment['data']))->toBe($content);
 
             return true;
         },
