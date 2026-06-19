@@ -7,6 +7,20 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 ## [Unreleased]
 
 ### Added
+- `EmailMessage` DTO: new optional send fields `tags`, `tracking`, `schedule`, `retention`, `substitutions`, `sandboxResult` — passed through to all four send request classes
+- New webhook events: `MailClicked`, `MailSuppressed`, `MailTransientError`, `MailReceived`, `DomainDnsError`, `SuppressionCreated`
+- `WebhookController` now dispatches all six new event types and maps them to correct status strings in the database driver
+- Guard in `WebhookController::persistStatusUpdate()` to skip DB update for non-message events (e.g. `domain.dns_error`, `suppression.created`) that carry no message ID
+
+### Changed
+- `AhasendService::send()` preserves all new optional fields when copying `EmailMessage` to assign an auto-generated UUID
+- `SendConversationalEmailRequest` applies all optional fields except `substitutions` (the conversational endpoint does not support template substitution)
+
+---
+
+## Initial release
+
+### Added
 - Initial release of `graystackit/laravel-ahasend-api`
 - Saloon v4 connector with API key authentication
 - `SendEmailRequest`, `SendHtmlEmailRequest`, `SendEmailWithAttachmentsRequest`

@@ -78,3 +78,65 @@ it('serializes to array via toArray', function (): void {
         ->and($array)->toHaveKey('bcc')
         ->and($array)->toHaveKey('attachments');
 });
+
+it('stores optional send fields on construction', function (): void {
+    $message = new EmailMessage(
+        fromEmail:     'sender@example.com',
+        fromName:      'Sender',
+        to:            [['email' => 'r@example.com']],
+        subject:       'Subject',
+        tags:          ['newsletter', 'promo'],
+        tracking:      ['opens' => true, 'clicks' => false],
+        schedule:      ['first_attempt' => '2026-07-01T09:00:00Z'],
+        retention:     ['metadata_days' => 14, 'data_days' => 7],
+        substitutions: ['name' => 'Alice'],
+        sandboxResult: 'deliver',
+    );
+
+    expect($message->tags)->toBe(['newsletter', 'promo'])
+        ->and($message->tracking)->toBe(['opens' => true, 'clicks' => false])
+        ->and($message->schedule)->toBe(['first_attempt' => '2026-07-01T09:00:00Z'])
+        ->and($message->retention)->toBe(['metadata_days' => 14, 'data_days' => 7])
+        ->and($message->substitutions)->toBe(['name' => 'Alice'])
+        ->and($message->sandboxResult)->toBe('deliver');
+});
+
+it('defaults optional send fields to null', function (): void {
+    $message = new EmailMessage(
+        fromEmail: 'sender@example.com',
+        fromName:  'Sender',
+        to:        [['email' => 'r@example.com']],
+        subject:   'Subject',
+    );
+
+    expect($message->tags)->toBeNull()
+        ->and($message->tracking)->toBeNull()
+        ->and($message->schedule)->toBeNull()
+        ->and($message->retention)->toBeNull()
+        ->and($message->substitutions)->toBeNull()
+        ->and($message->sandboxResult)->toBeNull();
+});
+
+it('round-trips optional send fields through fromArray and toArray', function (): void {
+    $message = EmailMessage::fromArray([
+        'from_email'    => 'a@example.com',
+        'from_name'     => 'Alice',
+        'to'            => [['email' => 'b@example.com']],
+        'subject'       => 'Test',
+        'tags'          => ['tag1'],
+        'tracking'      => ['opens' => true],
+        'schedule'      => ['first_attempt' => '2026-07-01T09:00:00Z'],
+        'retention'     => ['metadata_days' => 7],
+        'substitutions' => ['key' => 'value'],
+        'sandbox_result' => 'bounce',
+    ]);
+
+    $array = $message->toArray();
+
+    expect($array['tags'])->toBe(['tag1'])
+        ->and($array['tracking'])->toBe(['opens' => true])
+        ->and($array['schedule'])->toBe(['first_attempt' => '2026-07-01T09:00:00Z'])
+        ->and($array['retention'])->toBe(['metadata_days' => 7])
+        ->and($array['substitutions'])->toBe(['key' => 'value'])
+        ->and($array['sandbox_result'])->toBe('bounce');
+});

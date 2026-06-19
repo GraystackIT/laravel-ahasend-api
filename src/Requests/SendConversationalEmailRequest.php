@@ -54,6 +54,39 @@ class SendConversationalEmailRequest extends Request
             $payload['attachments'] = $this->buildAttachments();
         }
 
+        return $this->appendOptionalFields($payload);
+    }
+
+    /**
+     * Appends optional send fields supported by the conversational endpoint.
+     * Note: substitutions are intentionally excluded — the conversation endpoint
+     * does not support template variable substitution.
+     *
+     * @param  array<string, mixed>  $payload
+     * @return array<string, mixed>
+     */
+    private function appendOptionalFields(array $payload): array
+    {
+        if ($this->message->tags !== null) {
+            $payload['tags'] = $this->message->tags;
+        }
+
+        if ($this->message->tracking !== null) {
+            $payload['tracking'] = $this->message->tracking;
+        }
+
+        if ($this->message->schedule !== null) {
+            $payload['schedule'] = $this->message->schedule;
+        }
+
+        if ($this->message->retention !== null) {
+            $payload['retention'] = $this->message->retention;
+        }
+
+        if ($this->message->sandboxResult !== null) {
+            $payload['sandbox_result'] = $this->message->sandboxResult;
+        }
+
         return $payload;
     }
 

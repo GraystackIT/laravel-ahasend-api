@@ -2,10 +2,16 @@
 
 declare(strict_types=1);
 
+use GraystackIT\Ahasend\Events\DomainDnsError;
 use GraystackIT\Ahasend\Events\MailBounced;
+use GraystackIT\Ahasend\Events\MailClicked;
 use GraystackIT\Ahasend\Events\MailDelivered;
 use GraystackIT\Ahasend\Events\MailFailed;
 use GraystackIT\Ahasend\Events\MailOpened;
+use GraystackIT\Ahasend\Events\MailReceived;
+use GraystackIT\Ahasend\Events\MailSuppressed;
+use GraystackIT\Ahasend\Events\MailTransientError;
+use GraystackIT\Ahasend\Events\SuppressionCreated;
 use Illuminate\Support\Facades\Event;
 
 // ─── Helpers ──────────────────────────────────────────────────────────────
@@ -86,9 +92,79 @@ it('handles unknown event types without error', function (): void {
         MailBounced::class,
     ]);
 
-    postWebhook(webhookPayload('message.clicked'))->assertOk();
+    postWebhook(webhookPayload('message.completely_unknown'))->assertOk();
 
     Event::assertNothingDispatched();
+});
+
+it('dispatches MailClicked event with url on clicked webhook', function (): void {
+    Event::fake([MailClicked::class]);
+
+    postWebhook(webhookPayload('message.clicked', 'msg-clicked', 'user@example.com', ['url' => 'https://example.com']));
+
+    Event::assertDispatched(MailClicked::class, function (MailClicked $event): bool {
+        return $event->messageId === 'msg-clicked'
+            && $event->recipient === 'user@example.com'
+            && $event->url === 'https://example.com';
+    });
+});
+
+it('dispatches MailSuppressed event with suppression_type on suppressed webhook', function (): void {
+    Event::fake([MailSuppressed::class]);
+
+    postWebhook(webhookPayload('message.suppressed', 'msg-suppressed', 'user@example.com', ['suppression_type' => 'unsubscribe']));
+
+    Event::assertDispatched(MailSuppressed::class, function (MailSuppressed $event): bool {
+        return $event->messageId === 'msg-suppressed' && $event->suppressionType === 'unsubscribe';
+    });
+});
+
+it('dispatches MailTransientError event with reason on transient_error webhook', function (): void {
+    Event::fake([MailTransientError::class]);
+
+    postWebhook(webhookPayload('message.transient_error', 'msg-transient', 'user@example.com', ['reason' => 'connection timeout']));
+
+    Event::assertDispatched(MailTransientError::class, function (MailTransientError $event): bool {
+        return $event->messageId === 'msg-transient' && $event->reason === 'connection timeout';
+    });
+});
+
+it('dispatches MailReceived event on reception webhook', function (): void {
+    Event::fake([MailReceived::class]);
+
+    postWebhook(webhookPayload('message.reception', 'msg-received'));
+
+    Event::assertDispatched(MailReceived::class, function (MailReceived $event): bool {
+        return $event->messageId === 'msg-received';
+    });
+});
+
+it('dispatches DomainDnsError event on domain dns_error webhook', function (): void {
+    Event::fake([DomainDnsError::class]);
+
+    postWebhook([
+        'type'      => 'domain.dns_error',
+        'timestamp' => date('c'),
+        'data'      => ['domain' => 'mail.example.com', 'errors' => ['SPF record missing']],
+    ]);
+
+    Event::assertDispatched(DomainDnsError::class, function (DomainDnsError $event): bool {
+        return $event->domain === 'mail.example.com';
+    });
+});
+
+it('dispatches SuppressionCreated event on suppression created webhook', function (): void {
+    Event::fake([SuppressionCreated::class]);
+
+    postWebhook([
+        'type'      => 'suppression.created',
+        'timestamp' => date('c'),
+        'data'      => ['email' => 'bounced@example.com', 'type' => 'hard_bounce'],
+    ]);
+
+    Event::assertDispatched(SuppressionCreated::class, function (SuppressionCreated $event): bool {
+        return $event->email === 'bounced@example.com' && $event->type === 'hard_bounce';
+    });
 });
 
 // ─── Signature verification ───────────────────────────────────────────────

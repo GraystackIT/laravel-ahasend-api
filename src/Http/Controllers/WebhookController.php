@@ -4,10 +4,16 @@ declare(strict_types=1);
 
 namespace GraystackIT\Ahasend\Http\Controllers;
 
+use GraystackIT\Ahasend\Events\DomainDnsError;
 use GraystackIT\Ahasend\Events\MailBounced;
+use GraystackIT\Ahasend\Events\MailClicked;
 use GraystackIT\Ahasend\Events\MailDelivered;
 use GraystackIT\Ahasend\Events\MailFailed;
 use GraystackIT\Ahasend\Events\MailOpened;
+use GraystackIT\Ahasend\Events\MailReceived;
+use GraystackIT\Ahasend\Events\MailSuppressed;
+use GraystackIT\Ahasend\Events\MailTransientError;
+use GraystackIT\Ahasend\Events\SuppressionCreated;
 use GraystackIT\Ahasend\Models\AhasendMessage;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -111,12 +117,20 @@ class WebhookController extends Controller
             return;
         }
 
+        if ($messageId === '') {
+            return;
+        }
+
         $status = match ($event) {
-            'message.delivered' => 'delivered',
-            'message.opened'    => 'opened',
-            'message.failed'    => 'failed',
-            'message.bounced'   => 'bounced',
-            default             => $event,
+            'message.delivered'      => 'delivered',
+            'message.opened'         => 'opened',
+            'message.clicked'        => 'clicked',
+            'message.failed'         => 'failed',
+            'message.bounced'        => 'bounced',
+            'message.suppressed'     => 'suppressed',
+            'message.transient_error' => 'transient_error',
+            'message.reception'      => 'received',
+            default                  => $event,
         };
 
         AhasendMessage::where('message_id', $messageId)
@@ -131,21 +145,49 @@ class WebhookController extends Controller
     private function dispatchEvent(string $event, string $messageId, string $recipient, array $payload): void
     {
         match ($event) {
-            'message.delivered' => MailDelivered::dispatch($messageId, $recipient, $payload),
-            'message.opened'    => MailOpened::dispatch($messageId, $recipient, $payload),
-            'message.failed'    => MailFailed::dispatch(
+            'message.delivered'       => MailDelivered::dispatch($messageId, $recipient, $payload),
+            'message.opened'          => MailOpened::dispatch($messageId, $recipient, $payload),
+            'message.clicked'         => MailClicked::dispatch(
+                $messageId,
+                $recipient,
+                $payload['url'] ?? null,
+                $payload,
+            ),
+            'message.failed'          => MailFailed::dispatch(
                 $messageId,
                 $recipient,
                 $payload['reason'] ?? null,
                 $payload,
             ),
-            'message.bounced'   => MailBounced::dispatch(
+            'message.bounced'         => MailBounced::dispatch(
                 $messageId,
                 $recipient,
                 $payload['bounce_type'] ?? null,
                 $payload,
             ),
-            default             => Log::debug("Ahasend webhook: unhandled event [{$event}]"),
+            'message.suppressed'      => MailSuppressed::dispatch(
+                $messageId,
+                $recipient,
+                $payload['suppression_type'] ?? null,
+                $payload,
+            ),
+            'message.transient_error' => MailTransientError::dispatch(
+                $messageId,
+                $recipient,
+                $payload['reason'] ?? null,
+                $payload,
+            ),
+            'message.reception'       => MailReceived::dispatch($messageId, $recipient, $payload),
+            'domain.dns_error'        => DomainDnsError::dispatch(
+                $payload['domain'] ?? '',
+                $payload,
+            ),
+            'suppression.created'     => SuppressionCreated::dispatch(
+                $payload['email'] ?? $recipient,
+                $payload['type'] ?? null,
+                $payload,
+            ),
+            default                   => Log::debug("Ahasend webhook: unhandled event [{$event}]"),
         };
     }
 }
