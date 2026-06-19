@@ -6,6 +6,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+## [0.1.0] - 2026-06-19
+
 ### Added
 - `EmailMessage` DTO: new optional send fields `tags`, `tracking`, `schedule`, `retention`, `substitutions`, `sandboxResult` — passed through to all four send request classes
 - New webhook events: `MailClicked`, `MailSuppressed`, `MailTransientError`, `MailReceived`, `DomainDnsError`, `SuppressionCreated`
