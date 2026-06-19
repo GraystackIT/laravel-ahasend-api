@@ -6,6 +6,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+## [0.1.1] - 2026-06-19
+
 ### Fixed
 - Inbound **message routing** now dispatches `MailReceived`. AhaSend delivers inbound emails as `message.routing` (not `message.reception`) with the recipient under `data.to`; the webhook controller now handles that event type and resolves the recipient from `recipient` / `email` / `to`. Previously inbound mail was logged as an "unhandled event" and dropped.
 
