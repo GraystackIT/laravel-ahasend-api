@@ -5,21 +5,21 @@ declare(strict_types=1);
 namespace GraystackIT\Ahasend\Data;
 
 /**
- * Represents a deliverability breakdown returned by the Ahasend Reports API.
+ * Represents a single time-bucketed entry from the Ahasend deliverability statistics report.
  */
 final class DeliverabilityBreakdown
 {
-    /**
-     * @param  array<int, array{domain: string, total: int, delivered: int, bounced: int, rate: float}>  $domains
-     */
     public function __construct(
-        public readonly int   $totalSent,
-        public readonly int   $totalDelivered,
-        public readonly int   $totalBounced,
-        public readonly float $deliveryRate,
-        public readonly array $domains = [],
-        public readonly ?string $from = null,
-        public readonly ?string $to = null,
+        public readonly string $fromTimestamp,
+        public readonly string $toTimestamp,
+        public readonly int    $receptionCount = 0,
+        public readonly int    $deliveredCount = 0,
+        public readonly int    $deferredCount = 0,
+        public readonly int    $bouncedCount = 0,
+        public readonly int    $failedCount = 0,
+        public readonly int    $suppressedCount = 0,
+        public readonly int    $openedCount = 0,
+        public readonly int    $clickedCount = 0,
     ) {}
 
     /**
@@ -27,19 +27,17 @@ final class DeliverabilityBreakdown
      */
     public static function fromArray(array $data): self
     {
-        $totalSent      = (int) ($data['total_sent'] ?? 0);
-        $totalDelivered = (int) ($data['total_delivered'] ?? 0);
-
         return new self(
-            totalSent:      $totalSent,
-            totalDelivered: $totalDelivered,
-            totalBounced:   (int) ($data['total_bounced'] ?? 0),
-            deliveryRate:   isset($data['delivery_rate'])
-                ? (float) $data['delivery_rate']
-                : ($totalSent > 0 ? round($totalDelivered / $totalSent * 100, 2) : 0.0),
-            domains:        $data['domains'] ?? [],
-            from:           isset($data['from']) ? (string) $data['from'] : null,
-            to:             isset($data['to']) ? (string) $data['to'] : null,
+            fromTimestamp:   (string) ($data['from_timestamp'] ?? ''),
+            toTimestamp:     (string) ($data['to_timestamp'] ?? ''),
+            receptionCount:  (int) ($data['reception_count'] ?? 0),
+            deliveredCount:  (int) ($data['delivered_count'] ?? 0),
+            deferredCount:   (int) ($data['deferred_count'] ?? 0),
+            bouncedCount:    (int) ($data['bounced_count'] ?? 0),
+            failedCount:     (int) ($data['failed_count'] ?? 0),
+            suppressedCount: (int) ($data['suppressed_count'] ?? 0),
+            openedCount:     (int) ($data['opened_count'] ?? 0),
+            clickedCount:    (int) ($data['clicked_count'] ?? 0),
         );
     }
 
@@ -49,13 +47,16 @@ final class DeliverabilityBreakdown
     public function toArray(): array
     {
         return [
-            'total_sent'      => $this->totalSent,
-            'total_delivered' => $this->totalDelivered,
-            'total_bounced'   => $this->totalBounced,
-            'delivery_rate'   => $this->deliveryRate,
-            'domains'         => $this->domains,
-            'from'            => $this->from,
-            'to'              => $this->to,
+            'from_timestamp'   => $this->fromTimestamp,
+            'to_timestamp'     => $this->toTimestamp,
+            'reception_count'  => $this->receptionCount,
+            'delivered_count'  => $this->deliveredCount,
+            'deferred_count'   => $this->deferredCount,
+            'bounced_count'    => $this->bouncedCount,
+            'failed_count'     => $this->failedCount,
+            'suppressed_count' => $this->suppressedCount,
+            'opened_count'     => $this->openedCount,
+            'clicked_count'    => $this->clickedCount,
         ];
     }
 }

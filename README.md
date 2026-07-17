@@ -139,6 +139,8 @@ $message = new EmailMessage(
 $ahasendMessageId = $mailer->send($message);
 ```
 
+`EmailMessage` also accepts these optional fields, all passed straight through to the Ahasend API: `tags` (string[]), `tracking` (`['open' => bool, 'click' => bool]`), `schedule` (`['first_attempt' => ..., 'expires' => ...]`, RFC3339), `retention` (`['metadata' => int, 'data' => int]`, days), `substitutions` (template variables — not supported on the conversational/CC-BCC endpoint), `sandboxResult` (`deliver`/`bounce`/`defer`/`fail`/`suppress`), `sandbox` (bool — route through AhaSend's sandbox without sending real mail), `replyTo` (`['email' => ..., 'name' => ...]`), `headers` (custom header map), and `ampContent` (AMP4EMAIL body).
+
 ## Webhook handling
 
 Register your endpoint URL in the Ahasend dashboard:
@@ -320,28 +322,36 @@ class MyController
 ```php
 $message = $messages->get('msg-abc123');
 
-echo $message->id;          // 'msg-abc123'
-echo $message->subject;     // 'Hello World'
+echo $message->id;            // 'msg-abc123'
+echo $message->subject;       // 'Hello World'
+echo $message->sender;        // 'sender@example.com'
+echo $message->recipient;     // 'recipient@example.com'
 echo $message->status->value; // 'delivered'
 echo $message->status->isTerminal(); // true
 ```
 
 ### List messages
 
-Uses cursor-based pagination:
+Uses cursor-based pagination, plus optional filters:
 
 ```php
 $result = $messages->list(
-    limit:  25,           // optional — max results to return
-    after:  'cursor-xyz', // optional — cursor for the next page
-    before: 'cursor-abc', // optional — cursor for the previous page
+    limit:     25,                       // optional — max results to return
+    after:     'cursor-xyz',             // optional — cursor for the next page
+    before:    'cursor-abc',             // optional — cursor for the previous page
+    status:    'delivered',              // optional
+    sender:    'sender@example.com',     // optional
+    recipient: 'recipient@example.com',  // optional
+    tags:      'welcome',                // optional — comma-separated
+    fromTime:  '2026-01-01T00:00:00Z',   // optional — RFC3339
+    toTime:    '2026-01-31T23:59:59Z',   // optional — RFC3339
 );
 
 foreach ($result['data'] as $message) {
     echo $message->id . ': ' . $message->subject;
 }
 
-// $result['meta'] contains cursor pagination info
+// $result['pagination'] contains has_more / next_cursor / previous_cursor
 ```
 
 ### Cancel a scheduled message
@@ -385,8 +395,8 @@ $credential = $smtp->create('Test App', sandbox: true);
 echo $credential->id;       // 'cred-xyz'
 echo $credential->username; // 'smtp_my_application'
 echo $credential->password; // 'generated-secret' (only available on create)
-echo $credential->host;     // 'smtp.ahasend.com'
-echo $credential->port;     // 587
+echo $credential->host;     // 'send.ahasend.com' (EU) or 'send-us.ahasend.com' (US)
+echo $credential->port;     // 587 — also available: 25, 2525 (STARTTLS required; port 465 is not supported)
 ```
 
 ### List all SMTP credentials
@@ -442,20 +452,23 @@ $suppression = $suppressions->create(
     domain:    'example.com',           // optional — restrict to a sending domain
 );
 
+echo $suppression->id;     // 'sup-xyz'
 echo $suppression->email;  // 'user@example.com'
 ```
 
 ### List suppressions
 
-Uses cursor-based pagination:
+Uses cursor-based pagination, plus optional filters:
 
 ```php
 $result = $suppressions->list(
-    limit:  50,                    // optional
-    after:  'cursor-xyz',          // optional
-    before: 'cursor-abc',          // optional
-    domain: 'example.com',         // optional — filter by sending domain
-    email:  'user@example.com',    // optional — filter by recipient email
+    limit:    50,                    // optional
+    after:    'cursor-xyz',          // optional
+    before:   'cursor-abc',          // optional
+    domain:   'example.com',         // optional — filter by sending domain
+    email:    'user@example.com',    // optional — filter by recipient email
+    fromTime: '2026-01-01T00:00:00Z', // optional — RFC3339, created after
+    toTime:   '2026-01-31T23:59:59Z', // optional — RFC3339, created before
 );
 
 foreach ($result['data'] as $suppression) {
@@ -467,14 +480,20 @@ foreach ($result['data'] as $suppression) {
 
 ### Delete a specific suppression
 
+Deletes by email (optionally scoped to a sending domain):
+
 ```php
 $suppressions->delete('user@example.com'); // true on success
+$suppressions->delete('user@example.com', domain: 'example.com'); // scoped to one domain
 ```
 
 ### Delete all suppressions
 
+Optionally scoped to a single sending domain:
+
 ```php
-$suppressions->deleteAll(); // true on success
+$suppressions->deleteAll(); // true on success — wipes the entire account list
+$suppressions->deleteAll(domain: 'example.com'); // wipes only suppressions for this domain
 ```
 
 ---
@@ -492,28 +511,33 @@ class MyController
 }
 ```
 
-All date/time parameters use RFC3339 format (e.g. `2024-01-01T00:00:00Z`).
+All date/time parameters use RFC3339 format (e.g. `2024-01-01T00:00:00Z`). Every report method returns a **list of time-bucketed entries** (one per `group_by` interval — `hour`, `day`, `week`, or `month`; defaults to `day`), matching AhaSend's statistics response shape. Note: AhaSend rate-limits these three statistics endpoints to 1 request/second with no burst allowance, versus 100 req/sec elsewhere — avoid tight polling loops.
 
 ### Bounce statistics
 
 ```php
-$stats = $reports->bounceStatistics(
-    fromTime:     '2024-01-01T00:00:00Z', // optional
-    toTime:       '2024-01-31T23:59:59Z', // optional
-    senderDomain: 'gmail.com',             // optional — filter by sending domain
+$buckets = $reports->bounceStatistics(
+    fromTime:         '2024-01-01T00:00:00Z', // optional
+    toTime:           '2024-01-31T23:59:59Z', // optional
+    senderDomain:     'gmail.com',             // optional — filter by sending domain
+    recipientDomains: 'gmail.com,outlook.com', // optional — comma-separated
+    tags:             'transactional',         // optional — comma-separated
+    groupBy:          'day',                   // optional — hour, day, week, month
 );
 
-echo $stats->totalSent;        // 1000
-echo $stats->hardBounces;      // 50
-echo $stats->softBounces;      // 20
-echo $stats->hardBounceRate;   // 5.0  (percent)
-echo $stats->totalBounceRate;  // 7.0
+foreach ($buckets as $bucket) {
+    echo $bucket->fromTimestamp . ' – ' . $bucket->toTimestamp . "\n";
+
+    foreach ($bucket->bounces as $bounce) {
+        echo "  {$bounce['classification']}: {$bounce['count']}\n";
+    }
+}
 ```
 
 ### Deliverability breakdown
 
 ```php
-$breakdown = $reports->deliverabilityBreakdown(
+$buckets = $reports->deliverabilityBreakdown(
     fromTime:         '2024-01-01T00:00:00Z', // optional
     toTime:           '2024-01-31T23:59:59Z', // optional
     senderDomain:     'yourdomain.com',        // optional
@@ -522,31 +546,29 @@ $breakdown = $reports->deliverabilityBreakdown(
     groupBy:          'day',                   // optional — hour, day, week, month
 );
 
-echo $breakdown->totalSent;      // 500
-echo $breakdown->totalDelivered; // 480
-echo $breakdown->deliveryRate;   // 96.0
-
-foreach ($breakdown->domains as $domain) {
-    echo $domain['domain'] . ': ' . $domain['rate'] . '%';
+foreach ($buckets as $bucket) {
+    echo $bucket->fromTimestamp . ': ' . $bucket->deliveredCount . ' delivered, ' . $bucket->bouncedCount . ' bounced';
 }
 ```
 
 ### Delivery time analytics
 
 ```php
-$analytics = $reports->deliveryTimeAnalytics(
-    fromTime:     '2024-01-01T00:00:00Z', // optional
-    toTime:       '2024-01-31T23:59:59Z', // optional
-    senderDomain: 'yahoo.com',             // optional
+$buckets = $reports->deliveryTimeAnalytics(
+    fromTime:         '2024-01-01T00:00:00Z', // optional
+    toTime:           '2024-01-31T23:59:59Z', // optional
+    senderDomain:     'yahoo.com',             // optional
+    recipientDomains: 'yahoo.com',             // optional — comma-separated
+    tags:             'transactional',         // optional — comma-separated
+    groupBy:          'day',                   // optional — hour, day, week, month
 );
 
-echo $analytics->averageDeliverySeconds; // 45.7
-echo $analytics->medianDeliverySeconds;  // 30.0
-echo $analytics->totalDelivered;         // 900
+foreach ($buckets as $bucket) {
+    echo $bucket->fromTimestamp . ': avg ' . $bucket->avgDeliveryTime . 's across ' . $bucket->deliveredCount . ' messages';
 
-// Breakdown by hour-of-day and calendar day
-foreach ($analytics->byHour as $hour) {
-    echo "Hour {$hour['hour']}: {$hour['avg_delivery_seconds']}s avg";
+    foreach ($bucket->deliveryTimes as $byDomain) {
+        echo "  {$byDomain['recipient_domain']}: {$byDomain['delivery_time']}s ({$byDomain['count']} messages)\n";
+    }
 }
 ```
 

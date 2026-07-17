@@ -65,12 +65,14 @@ class SuppressionService
         ?string $before = null,
         ?string $domain = null,
         ?string $email = null,
+        ?string $fromTime = null,
+        ?string $toTime = null,
     ): array {
         Log::info('Ahasend: listing suppressions');
 
         try {
             $response = $this->connector->send(
-                new ListSuppressionsRequest($limit, $after, $before, $domain, $email),
+                new ListSuppressionsRequest($limit, $after, $before, $domain, $email, $fromTime, $toTime),
             );
 
             $body = $response->json();
@@ -97,12 +99,12 @@ class SuppressionService
      *
      * @throws AhasendException
      */
-    public function delete(string $email): bool
+    public function delete(string $email, ?string $domain = null): bool
     {
         Log::info('Ahasend: deleting suppression', ['email' => $email]);
 
         try {
-            $response = $this->connector->send(new DeleteSuppressionRequest($email));
+            $response = $this->connector->send(new DeleteSuppressionRequest($email, $domain));
 
             Log::info('Ahasend: suppression deleted', ['email' => $email]);
 
@@ -119,16 +121,16 @@ class SuppressionService
     }
 
     /**
-     * Delete all suppressions.
+     * Delete all suppressions, optionally scoped to a single sending domain.
      *
      * @throws AhasendException
      */
-    public function deleteAll(): bool
+    public function deleteAll(?string $domain = null): bool
     {
         Log::info('Ahasend: deleting all suppressions');
 
         try {
-            $response = $this->connector->send(new DeleteAllSuppressionsRequest());
+            $response = $this->connector->send(new DeleteAllSuppressionsRequest($domain));
 
             Log::info('Ahasend: all suppressions deleted');
 

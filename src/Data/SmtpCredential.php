@@ -28,7 +28,7 @@ final class SmtpCredential
             id:        (string) ($data['id'] ?? ''),
             name:      (string) ($data['name'] ?? ''),
             username:  (string) ($data['username'] ?? ''),
-            host:      (string) ($data['host'] ?? 'smtp.ahasend.com'),
+            host:      (string) ($data['host'] ?? 'send.ahasend.com'),
             port:      (int) ($data['port'] ?? 587),
             password:  isset($data['password']) ? (string) $data['password'] : null,
             createdAt: isset($data['created_at']) ? (string) $data['created_at'] : null,

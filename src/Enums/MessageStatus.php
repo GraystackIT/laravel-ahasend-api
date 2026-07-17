@@ -6,33 +6,29 @@ namespace GraystackIT\Ahasend\Enums;
 
 enum MessageStatus: string
 {
-    case Queued    = 'queued';
-    case Scheduled = 'scheduled';
-    case Sent      = 'sent';
-    case Delivered = 'delivered';
-    case Opened    = 'opened';
-    case Clicked   = 'clicked';
-    case Failed    = 'failed';
-    case Bounced   = 'bounced';
-    case Cancelled = 'cancelled';
+    case Queued     = 'queued';
+    case Scheduled  = 'scheduled';
+    case Delivered  = 'delivered';
+    case Deferred   = 'deferred';
+    case Bounced    = 'bounced';
+    case Failed     = 'failed';
+    case Suppressed = 'suppressed';
 
     public function label(): string
     {
         return match ($this) {
-            self::Queued    => 'Queued',
-            self::Scheduled => 'Scheduled',
-            self::Sent      => 'Sent',
-            self::Delivered => 'Delivered',
-            self::Opened    => 'Opened',
-            self::Clicked   => 'Clicked',
-            self::Failed    => 'Failed',
-            self::Bounced   => 'Bounced',
-            self::Cancelled => 'Cancelled',
+            self::Queued     => 'Queued',
+            self::Scheduled  => 'Scheduled',
+            self::Delivered  => 'Delivered',
+            self::Deferred   => 'Deferred',
+            self::Bounced    => 'Bounced',
+            self::Failed     => 'Failed',
+            self::Suppressed => 'Suppressed',
         };
     }
 
     public function isTerminal(): bool
     {
-        return in_array($this, [self::Delivered, self::Failed, self::Bounced, self::Cancelled], strict: true);
+        return in_array($this, [self::Delivered, self::Bounced, self::Failed, self::Suppressed], strict: true);
     }
 }

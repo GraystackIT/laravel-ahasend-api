@@ -71,6 +71,22 @@ class SendHtmlEmailRequest extends Request
             $payload['sandbox_result'] = $this->message->sandboxResult;
         }
 
+        if ($this->message->replyTo !== null) {
+            $payload['reply_to'] = $this->message->replyTo;
+        }
+
+        if ($this->message->headers !== null) {
+            $payload['headers'] = $this->message->headers;
+        }
+
+        if ($this->message->ampContent !== null) {
+            $payload['amp_content'] = $this->message->ampContent;
+        }
+
+        if ($this->message->sandbox !== null) {
+            $payload['sandbox'] = $this->message->sandbox;
+        }
+
         return $payload;
     }
 }

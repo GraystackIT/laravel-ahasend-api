@@ -24,11 +24,11 @@ it('resolves MessageService from the container', function (): void {
 it('fetches a single message by ID', function (): void {
     $mockClient = new MockClient([
         GetMessageRequest::class => MockResponse::make([
-            'id'      => 'msg-001',
-            'subject' => 'Hello',
-            'from'    => ['email' => 'sender@example.com', 'name' => 'Sender'],
-            'to'      => [['email' => 'to@example.com']],
-            'status'  => 'delivered',
+            'id'        => 'msg-001',
+            'subject'   => 'Hello',
+            'sender'    => 'sender@example.com',
+            'recipient' => 'to@example.com',
+            'status'    => 'delivered',
         ], 200),
     ]);
 
@@ -68,21 +68,21 @@ it('lists messages and returns Message DTOs', function (): void {
         ListMessagesRequest::class => MockResponse::make([
             'data' => [
                 [
-                    'id'      => 'msg-001',
-                    'subject' => 'First',
-                    'from'    => ['email' => 'a@example.com', 'name' => 'A'],
-                    'to'      => [['email' => 'b@example.com']],
-                    'status'  => 'sent',
+                    'id'        => 'msg-001',
+                    'subject'   => 'First',
+                    'sender'    => 'a@example.com',
+                    'recipient' => 'b@example.com',
+                    'status'    => 'queued',
                 ],
                 [
-                    'id'      => 'msg-002',
-                    'subject' => 'Second',
-                    'from'    => ['email' => 'a@example.com', 'name' => 'A'],
-                    'to'      => [['email' => 'c@example.com']],
-                    'status'  => 'delivered',
+                    'id'        => 'msg-002',
+                    'subject'   => 'Second',
+                    'sender'    => 'a@example.com',
+                    'recipient' => 'c@example.com',
+                    'status'    => 'delivered',
                 ],
             ],
-            'meta' => ['total' => 2, 'page' => 1, 'per_page' => 25],
+            'pagination' => ['has_more' => false, 'next_cursor' => null, 'previous_cursor' => null],
         ], 200),
     ]);
 
@@ -96,14 +96,14 @@ it('lists messages and returns Message DTOs', function (): void {
         ->and($result['data'][0])->toBeInstanceOf(Message::class)
         ->and($result['data'][0]->id)->toBe('msg-001')
         ->and($result['data'][1]->status)->toBe(MessageStatus::Delivered)
-        ->and($result['meta']['total'])->toBe(2);
+        ->and($result['pagination']['has_more'])->toBeFalse();
 });
 
 it('filters messages with cursor pagination', function (): void {
     $mockClient = new MockClient([
         ListMessagesRequest::class => MockResponse::make([
-            'data' => [],
-            'meta' => [],
+            'data'       => [],
+            'pagination' => ['has_more' => false],
         ], 200),
     ]);
 
@@ -112,6 +112,30 @@ it('filters messages with cursor pagination', function (): void {
 
     $service = new MessageService($connector);
     $result  = $service->list(limit: 10, after: 'cursor-abc');
+
+    expect($result['data'])->toBeEmpty();
+});
+
+it('filters messages by status, sender, recipient, tags, and time range', function (): void {
+    $mockClient = new MockClient([
+        ListMessagesRequest::class => MockResponse::make([
+            'data'       => [],
+            'pagination' => ['has_more' => false],
+        ], 200),
+    ]);
+
+    $connector = app(AhasendConnector::class);
+    $connector->withMockClient($mockClient);
+
+    $service = new MessageService($connector);
+    $result  = $service->list(
+        status: 'delivered',
+        sender: 'a@example.com',
+        recipient: 'b@example.com',
+        tags: 'welcome',
+        fromTime: '2026-01-01T00:00:00Z',
+        toTime: '2026-01-31T00:00:00Z',
+    );
 
     expect($result['data'])->toBeEmpty();
 });

@@ -19,6 +19,8 @@ final class EmailMessage
      * @param  array<string, mixed>|null  $schedule
      * @param  array<string, mixed>|null  $retention
      * @param  array<string, mixed>|null  $substitutions
+     * @param  array{email: string, name?: string}|null  $replyTo
+     * @param  array<string, string>|null  $headers
      */
     public function __construct(
         public readonly string $fromEmail,
@@ -37,6 +39,10 @@ final class EmailMessage
         public readonly ?array $retention = null,
         public readonly ?array $substitutions = null,
         public readonly ?string $sandboxResult = null,
+        public readonly ?array $replyTo = null,
+        public readonly ?array $headers = null,
+        public readonly ?string $ampContent = null,
+        public readonly ?bool $sandbox = null,
     ) {}
 
     /**
@@ -63,6 +69,10 @@ final class EmailMessage
             retention:     $data['retention'] ?? null,
             substitutions: $data['substitutions'] ?? null,
             sandboxResult: $data['sandbox_result'] ?? null,
+            replyTo:       $data['reply_to'] ?? null,
+            headers:       $data['headers'] ?? null,
+            ampContent:    $data['amp_content'] ?? null,
+            sandbox:       $data['sandbox'] ?? null,
         );
     }
 
@@ -90,6 +100,10 @@ final class EmailMessage
             'retention'     => $this->retention,
             'substitutions' => $this->substitutions,
             'sandbox_result' => $this->sandboxResult,
+            'reply_to'      => $this->replyTo,
+            'headers'       => $this->headers,
+            'amp_content'   => $this->ampContent,
+            'sandbox'       => $this->sandbox,
         ];
     }
 }

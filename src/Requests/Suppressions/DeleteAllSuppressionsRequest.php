@@ -11,8 +11,18 @@ class DeleteAllSuppressionsRequest extends Request
 {
     protected Method $method = Method::DELETE;
 
+    public function __construct(private readonly ?string $domain = null) {}
+
     public function resolveEndpoint(): string
     {
-        return '/suppressions';
+        return '/suppressions/all';
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    protected function defaultQuery(): array
+    {
+        return $this->domain !== null ? ['domain' => $this->domain] : [];
     }
 }

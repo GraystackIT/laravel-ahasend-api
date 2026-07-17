@@ -12,20 +12,19 @@ use GraystackIT\Ahasend\Enums\MessageStatus;
 final class Message
 {
     /**
-     * @param  array<int, array{email: string, name?: string}>  $to
-     * @param  array<int, array{email: string, name?: string}>  $cc
+     * @param  string[]  $tags
      */
     public function __construct(
         public readonly string        $id,
         public readonly string        $subject,
-        public readonly string        $fromEmail,
-        public readonly string        $fromName,
-        public readonly array         $to,
+        public readonly string        $sender,
+        public readonly string        $recipient,
         public readonly MessageStatus $status,
-        public readonly array         $cc = [],
-        public readonly ?string       $scheduledAt = null,
+        public readonly array         $tags = [],
         public readonly ?string       $sentAt = null,
+        public readonly ?string       $deliveredAt = null,
         public readonly ?string       $createdAt = null,
+        public readonly ?string       $updatedAt = null,
     ) {}
 
     /**
@@ -33,19 +32,17 @@ final class Message
      */
     public static function fromArray(array $data): self
     {
-        $from = $data['from'] ?? [];
-
         return new self(
             id:          (string) ($data['id'] ?? $data['message_id'] ?? ''),
             subject:     (string) ($data['subject'] ?? ''),
-            fromEmail:   (string) ($from['email'] ?? ''),
-            fromName:    (string) ($from['name'] ?? ''),
-            to:          $data['to'] ?? [],
-            status:      MessageStatus::from($data['status'] ?? 'sent'),
-            cc:          $data['cc'] ?? [],
-            scheduledAt: isset($data['scheduled_at']) ? (string) $data['scheduled_at'] : null,
+            sender:      (string) ($data['sender'] ?? ''),
+            recipient:   (string) ($data['recipient'] ?? ''),
+            status:      MessageStatus::from($data['status'] ?? 'queued'),
+            tags:        $data['tags'] ?? [],
             sentAt:      isset($data['sent_at']) ? (string) $data['sent_at'] : null,
+            deliveredAt: isset($data['delivered_at']) ? (string) $data['delivered_at'] : null,
             createdAt:   isset($data['created_at']) ? (string) $data['created_at'] : null,
+            updatedAt:   isset($data['updated_at']) ? (string) $data['updated_at'] : null,
         );
     }
 
@@ -57,14 +54,14 @@ final class Message
         return [
             'id'           => $this->id,
             'subject'      => $this->subject,
-            'from_email'   => $this->fromEmail,
-            'from_name'    => $this->fromName,
-            'to'           => $this->to,
-            'cc'           => $this->cc,
+            'sender'       => $this->sender,
+            'recipient'    => $this->recipient,
             'status'       => $this->status->value,
-            'scheduled_at' => $this->scheduledAt,
+            'tags'         => $this->tags,
             'sent_at'      => $this->sentAt,
+            'delivered_at' => $this->deliveredAt,
             'created_at'   => $this->createdAt,
+            'updated_at'   => $this->updatedAt,
         ];
     }
 }

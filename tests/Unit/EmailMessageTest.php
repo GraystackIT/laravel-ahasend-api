@@ -114,7 +114,29 @@ it('defaults optional send fields to null', function (): void {
         ->and($message->schedule)->toBeNull()
         ->and($message->retention)->toBeNull()
         ->and($message->substitutions)->toBeNull()
-        ->and($message->sandboxResult)->toBeNull();
+        ->and($message->sandboxResult)->toBeNull()
+        ->and($message->replyTo)->toBeNull()
+        ->and($message->headers)->toBeNull()
+        ->and($message->ampContent)->toBeNull()
+        ->and($message->sandbox)->toBeNull();
+});
+
+it('stores reply_to, headers, amp_content, and sandbox fields on construction', function (): void {
+    $message = new EmailMessage(
+        fromEmail:  'sender@example.com',
+        fromName:   'Sender',
+        to:         [['email' => 'r@example.com']],
+        subject:    'Subject',
+        replyTo:    ['email' => 'reply@example.com', 'name' => 'Reply'],
+        headers:    ['X-Custom-Header' => 'value'],
+        ampContent: '<html amp4email></html>',
+        sandbox:    true,
+    );
+
+    expect($message->replyTo)->toBe(['email' => 'reply@example.com', 'name' => 'Reply'])
+        ->and($message->headers)->toBe(['X-Custom-Header' => 'value'])
+        ->and($message->ampContent)->toBe('<html amp4email></html>')
+        ->and($message->sandbox)->toBeTrue();
 });
 
 it('round-trips optional send fields through fromArray and toArray', function (): void {

@@ -54,6 +54,10 @@ class AhasendService
                 retention:     $message->retention,
                 substitutions: $message->substitutions,
                 sandboxResult: $message->sandboxResult,
+                replyTo:       $message->replyTo,
+                headers:       $message->headers,
+                ampContent:    $message->ampContent,
+                sandbox:       $message->sandbox,
             );
         }
 

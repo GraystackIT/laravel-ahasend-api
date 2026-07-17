@@ -30,9 +30,9 @@ class AhasendConnector extends Connector
     protected function defaultHeaders(): array
     {
         return [
-            'X-Api-Key'    => $this->apiKey,
-            'Accept'       => 'application/json',
-            'Content-Type' => 'application/json',
+            'Authorization' => "Bearer {$this->apiKey}",
+            'Accept'        => 'application/json',
+            'Content-Type'  => 'application/json',
         ];
     }
 }

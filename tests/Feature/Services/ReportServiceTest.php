@@ -22,15 +22,20 @@ it('resolves ReportService from the container', function (): void {
 
 // ─── bounceStatistics() ───────────────────────────────────────────────────
 
-it('returns bounce statistics as a typed DTO', function (): void {
+it('returns bounce statistics as a list of time-bucketed DTOs', function (): void {
     $mockClient = new MockClient([
         BounceStatisticsRequest::class => MockResponse::make([
-            'total_sent'        => 1000,
-            'hard_bounces'      => 50,
-            'soft_bounces'      => 20,
-            'hard_bounce_rate'  => 5.0,
-            'soft_bounce_rate'  => 2.0,
-            'total_bounce_rate' => 7.0,
+            'object' => 'list',
+            'data'   => [
+                [
+                    'from_timestamp' => '2024-01-01T00:00:00Z',
+                    'to_timestamp'   => '2024-01-02T00:00:00Z',
+                    'bounces'        => [
+                        ['classification' => 'hard', 'count' => 5],
+                        ['classification' => 'soft', 'count' => 2],
+                    ],
+                ],
+            ],
         ], 200),
     ]);
 
@@ -38,53 +43,27 @@ it('returns bounce statistics as a typed DTO', function (): void {
     $connector->withMockClient($mockClient);
 
     $service = new ReportService($connector);
-    $stats   = $service->bounceStatistics();
+    $buckets = $service->bounceStatistics();
 
-    expect($stats)->toBeInstanceOf(BounceStatistics::class)
-        ->and($stats->totalSent)->toBe(1000)
-        ->and($stats->hardBounces)->toBe(50)
-        ->and($stats->softBounces)->toBe(20)
-        ->and($stats->hardBounceRate)->toBe(5.0)
-        ->and($stats->totalBounceRate)->toBe(7.0);
+    expect($buckets)->toHaveCount(1)
+        ->and($buckets[0])->toBeInstanceOf(BounceStatistics::class)
+        ->and($buckets[0]->fromTimestamp)->toBe('2024-01-01T00:00:00Z')
+        ->and($buckets[0]->bounces)->toHaveCount(2)
+        ->and($buckets[0]->bounces[0]['classification'])->toBe('hard');
 });
 
-it('calculates bounce rates from raw counts when rates are absent', function (): void {
+it('returns an empty array when no bounce data is present', function (): void {
     $mockClient = new MockClient([
-        BounceStatisticsRequest::class => MockResponse::make([
-            'total_sent'   => 200,
-            'hard_bounces' => 10,
-            'soft_bounces' => 5,
-        ], 200),
+        BounceStatisticsRequest::class => MockResponse::make(['object' => 'list', 'data' => []], 200),
     ]);
 
     $connector = app(AhasendConnector::class);
     $connector->withMockClient($mockClient);
 
     $service = new ReportService($connector);
-    $stats   = $service->bounceStatistics();
+    $buckets = $service->bounceStatistics();
 
-    expect($stats->hardBounceRate)->toBe(5.0)
-        ->and($stats->softBounceRate)->toBe(2.5)
-        ->and($stats->totalBounceRate)->toBe(7.5);
-});
-
-it('returns zero rates when total_sent is zero', function (): void {
-    $mockClient = new MockClient([
-        BounceStatisticsRequest::class => MockResponse::make([
-            'total_sent'   => 0,
-            'hard_bounces' => 0,
-            'soft_bounces' => 0,
-        ], 200),
-    ]);
-
-    $connector = app(AhasendConnector::class);
-    $connector->withMockClient($mockClient);
-
-    $service = new ReportService($connector);
-    $stats   = $service->bounceStatistics();
-
-    expect($stats->hardBounceRate)->toBe(0.0)
-        ->and($stats->totalBounceRate)->toBe(0.0);
+    expect($buckets)->toBeEmpty();
 });
 
 it('throws AhasendException on API error for bounce statistics', function (): void {
@@ -101,15 +80,23 @@ it('throws AhasendException on API error for bounce statistics', function (): vo
 
 // ─── deliverabilityBreakdown() ────────────────────────────────────────────
 
-it('returns deliverability breakdown as a typed DTO', function (): void {
+it('returns deliverability statistics as a list of time-bucketed DTOs', function (): void {
     $mockClient = new MockClient([
         DeliverabilityBreakdownRequest::class => MockResponse::make([
-            'total_sent'      => 500,
-            'total_delivered' => 480,
-            'total_bounced'   => 20,
-            'delivery_rate'   => 96.0,
-            'domains'         => [
-                ['domain' => 'gmail.com', 'total' => 300, 'delivered' => 295, 'bounced' => 5, 'rate' => 98.3],
+            'object' => 'list',
+            'data'   => [
+                [
+                    'from_timestamp'   => '2024-01-01T00:00:00Z',
+                    'to_timestamp'     => '2024-01-02T00:00:00Z',
+                    'reception_count'  => 500,
+                    'delivered_count'  => 480,
+                    'deferred_count'   => 10,
+                    'bounced_count'    => 20,
+                    'failed_count'     => 0,
+                    'suppressed_count' => 0,
+                    'opened_count'     => 300,
+                    'clicked_count'    => 50,
+                ],
             ],
         ], 200),
     ]);
@@ -117,15 +104,14 @@ it('returns deliverability breakdown as a typed DTO', function (): void {
     $connector = app(AhasendConnector::class);
     $connector->withMockClient($mockClient);
 
-    $service    = new ReportService($connector);
-    $breakdown  = $service->deliverabilityBreakdown(fromTime: '2024-01-01T00:00:00Z', toTime: '2024-01-31T23:59:59Z');
+    $service = new ReportService($connector);
+    $buckets = $service->deliverabilityBreakdown(fromTime: '2024-01-01T00:00:00Z', toTime: '2024-01-31T23:59:59Z');
 
-    expect($breakdown)->toBeInstanceOf(DeliverabilityBreakdown::class)
-        ->and($breakdown->totalSent)->toBe(500)
-        ->and($breakdown->totalDelivered)->toBe(480)
-        ->and($breakdown->deliveryRate)->toBe(96.0)
-        ->and($breakdown->domains)->toHaveCount(1)
-        ->and($breakdown->domains[0]['domain'])->toBe('gmail.com');
+    expect($buckets)->toHaveCount(1)
+        ->and($buckets[0])->toBeInstanceOf(DeliverabilityBreakdown::class)
+        ->and($buckets[0]->receptionCount)->toBe(500)
+        ->and($buckets[0]->deliveredCount)->toBe(480)
+        ->and($buckets[0]->bouncedCount)->toBe(20);
 });
 
 it('throws AhasendException on API error for deliverability breakdown', function (): void {
@@ -142,18 +128,20 @@ it('throws AhasendException on API error for deliverability breakdown', function
 
 // ─── deliveryTimeAnalytics() ──────────────────────────────────────────────
 
-it('returns delivery time analytics as a typed DTO', function (): void {
+it('returns delivery time statistics as a list of time-bucketed DTOs', function (): void {
     $mockClient = new MockClient([
         DeliveryTimeAnalyticsRequest::class => MockResponse::make([
-            'average_delivery_seconds' => 45.7,
-            'median_delivery_seconds'  => 30.0,
-            'total_delivered'          => 900,
-            'by_hour'                  => [
-                ['hour' => 9, 'count' => 120, 'avg_delivery_seconds' => 38.2],
-                ['hour' => 14, 'count' => 200, 'avg_delivery_seconds' => 42.1],
-            ],
-            'by_day'                   => [
-                ['day' => '2024-01-15', 'count' => 400, 'avg_delivery_seconds' => 44.5],
+            'object' => 'list',
+            'data'   => [
+                [
+                    'from_timestamp'    => '2024-01-15T00:00:00Z',
+                    'to_timestamp'      => '2024-01-16T00:00:00Z',
+                    'avg_delivery_time' => 44.5,
+                    'delivered_count'   => 400,
+                    'delivery_times'    => [
+                        ['recipient_domain' => 'gmail.com', 'delivery_time' => 38.2, 'count' => 120],
+                    ],
+                ],
             ],
         ], 200),
     ]);
@@ -161,33 +149,28 @@ it('returns delivery time analytics as a typed DTO', function (): void {
     $connector = app(AhasendConnector::class);
     $connector->withMockClient($mockClient);
 
-    $service   = new ReportService($connector);
-    $analytics = $service->deliveryTimeAnalytics();
+    $service = new ReportService($connector);
+    $buckets = $service->deliveryTimeAnalytics();
 
-    expect($analytics)->toBeInstanceOf(DeliveryTimeAnalytics::class)
-        ->and($analytics->averageDeliverySeconds)->toBe(45.7)
-        ->and($analytics->medianDeliverySeconds)->toBe(30.0)
-        ->and($analytics->totalDelivered)->toBe(900)
-        ->and($analytics->byHour)->toHaveCount(2)
-        ->and($analytics->byDay)->toHaveCount(1);
+    expect($buckets)->toHaveCount(1)
+        ->and($buckets[0])->toBeInstanceOf(DeliveryTimeAnalytics::class)
+        ->and($buckets[0]->avgDeliveryTime)->toBe(44.5)
+        ->and($buckets[0]->deliveredCount)->toBe(400)
+        ->and($buckets[0]->deliveryTimes)->toHaveCount(1);
 });
 
 it('filters delivery time analytics by domain', function (): void {
     $mockClient = new MockClient([
-        DeliveryTimeAnalyticsRequest::class => MockResponse::make([
-            'average_delivery_seconds' => 22.0,
-            'median_delivery_seconds'  => 18.0,
-            'total_delivered'          => 100,
-        ], 200),
+        DeliveryTimeAnalyticsRequest::class => MockResponse::make(['object' => 'list', 'data' => []], 200),
     ]);
 
     $connector = app(AhasendConnector::class);
     $connector->withMockClient($mockClient);
 
-    $service   = new ReportService($connector);
-    $analytics = $service->deliveryTimeAnalytics(senderDomain: 'outlook.com');
+    $service = new ReportService($connector);
+    $buckets = $service->deliveryTimeAnalytics(senderDomain: 'outlook.com');
 
-    expect($analytics->averageDeliverySeconds)->toBe(22.0);
+    expect($buckets)->toBeEmpty();
 });
 
 it('throws AhasendException on API error for delivery time analytics', function (): void {

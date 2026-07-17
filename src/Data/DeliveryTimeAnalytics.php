@@ -5,22 +5,19 @@ declare(strict_types=1);
 namespace GraystackIT\Ahasend\Data;
 
 /**
- * Represents delivery time analytics returned by the Ahasend Reports API.
+ * Represents a single time-bucketed entry from the Ahasend delivery time statistics report.
  */
 final class DeliveryTimeAnalytics
 {
     /**
-     * @param  array<int, array{hour: int, count: int, avg_delivery_seconds: float}>  $byHour
-     * @param  array<int, array{day: string, count: int, avg_delivery_seconds: float}>  $byDay
+     * @param  array<int, array{recipient_domain: string, delivery_time: float, count: int}>  $deliveryTimes
      */
     public function __construct(
-        public readonly float  $averageDeliverySeconds,
-        public readonly float  $medianDeliverySeconds,
-        public readonly int    $totalDelivered,
-        public readonly array  $byHour = [],
-        public readonly array  $byDay = [],
-        public readonly ?string $from = null,
-        public readonly ?string $to = null,
+        public readonly string $fromTimestamp,
+        public readonly string $toTimestamp,
+        public readonly float  $avgDeliveryTime = 0.0,
+        public readonly int    $deliveredCount = 0,
+        public readonly array  $deliveryTimes = [],
     ) {}
 
     /**
@@ -29,13 +26,11 @@ final class DeliveryTimeAnalytics
     public static function fromArray(array $data): self
     {
         return new self(
-            averageDeliverySeconds: (float) ($data['average_delivery_seconds'] ?? 0.0),
-            medianDeliverySeconds:  (float) ($data['median_delivery_seconds'] ?? 0.0),
-            totalDelivered:         (int) ($data['total_delivered'] ?? 0),
-            byHour:                 $data['by_hour'] ?? [],
-            byDay:                  $data['by_day'] ?? [],
-            from:                   isset($data['from']) ? (string) $data['from'] : null,
-            to:                     isset($data['to']) ? (string) $data['to'] : null,
+            fromTimestamp:   (string) ($data['from_timestamp'] ?? ''),
+            toTimestamp:     (string) ($data['to_timestamp'] ?? ''),
+            avgDeliveryTime: (float) ($data['avg_delivery_time'] ?? 0.0),
+            deliveredCount:  (int) ($data['delivered_count'] ?? 0),
+            deliveryTimes:   $data['delivery_times'] ?? [],
         );
     }
 
@@ -45,13 +40,11 @@ final class DeliveryTimeAnalytics
     public function toArray(): array
     {
         return [
-            'average_delivery_seconds' => $this->averageDeliverySeconds,
-            'median_delivery_seconds'  => $this->medianDeliverySeconds,
-            'total_delivered'          => $this->totalDelivered,
-            'by_hour'                  => $this->byHour,
-            'by_day'                   => $this->byDay,
-            'from'                     => $this->from,
-            'to'                       => $this->to,
+            'from_timestamp'    => $this->fromTimestamp,
+            'to_timestamp'      => $this->toTimestamp,
+            'avg_delivery_time' => $this->avgDeliveryTime,
+            'delivered_count'   => $this->deliveredCount,
+            'delivery_times'    => $this->deliveryTimes,
         ];
     }
 }

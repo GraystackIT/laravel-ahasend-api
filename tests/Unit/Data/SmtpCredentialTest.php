@@ -31,7 +31,7 @@ it('defaults host and port when not provided', function (): void {
         'username' => 'user',
     ]);
 
-    expect($credential->host)->toBe('smtp.ahasend.com')
+    expect($credential->host)->toBe('send.ahasend.com')
         ->and($credential->port)->toBe(587);
 });
 

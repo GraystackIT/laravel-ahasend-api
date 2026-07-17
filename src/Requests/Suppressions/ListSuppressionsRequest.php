@@ -17,6 +17,8 @@ class ListSuppressionsRequest extends Request
         private readonly ?string $before = null,
         private readonly ?string $domain = null,
         private readonly ?string $email = null,
+        private readonly ?string $fromTime = null,
+        private readonly ?string $toTime = null,
     ) {}
 
     public function resolveEndpoint(): string
@@ -49,6 +51,14 @@ class ListSuppressionsRequest extends Request
 
         if ($this->email !== null) {
             $query['email'] = $this->email;
+        }
+
+        if ($this->fromTime !== null) {
+            $query['from_time'] = $this->fromTime;
+        }
+
+        if ($this->toTime !== null) {
+            $query['to_time'] = $this->toTime;
         }
 
         return $query;

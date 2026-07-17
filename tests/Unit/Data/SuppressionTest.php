@@ -3,45 +3,43 @@
 declare(strict_types=1);
 
 use GraystackIT\Ahasend\Data\Suppression;
-use GraystackIT\Ahasend\Enums\SuppressionType;
 
 it('constructs a Suppression from an API response array', function (): void {
     $suppression = Suppression::fromArray([
+        'id'         => 'sup-abc123',
         'email'      => 'bounce@example.com',
-        'type'       => 'hard_bounce',
+        'domain'     => 'example.com',
         'reason'     => 'User unknown',
+        'expires_at' => '2026-12-31T00:00:00Z',
         'created_at' => '2024-06-01T00:00:00Z',
     ]);
 
-    expect($suppression->email)->toBe('bounce@example.com')
-        ->and($suppression->type)->toBe(SuppressionType::HardBounce)
+    expect($suppression->id)->toBe('sup-abc123')
+        ->and($suppression->email)->toBe('bounce@example.com')
+        ->and($suppression->domain)->toBe('example.com')
         ->and($suppression->reason)->toBe('User unknown')
+        ->and($suppression->expiresAt)->toBe('2026-12-31T00:00:00Z')
         ->and($suppression->createdAt)->toBe('2024-06-01T00:00:00Z');
 });
 
-it('defaults to manual type when type is absent', function (): void {
+it('defaults domain and reason to null when absent', function (): void {
     $suppression = Suppression::fromArray(['email' => 'user@example.com']);
 
-    expect($suppression->type)->toBe(SuppressionType::Manual);
+    expect($suppression->domain)->toBeNull()
+        ->and($suppression->reason)->toBeNull();
 });
 
 it('serializes a Suppression to array', function (): void {
     $suppression = Suppression::fromArray([
-        'email' => 'complaint@example.com',
-        'type'  => 'complaint',
+        'id'         => 'sup-1',
+        'email'      => 'complaint@example.com',
+        'expires_at' => '2026-01-01T00:00:00Z',
     ]);
 
     $array = $suppression->toArray();
 
     expect($array)->toBeArray()
+        ->and($array['id'])->toBe('sup-1')
         ->and($array['email'])->toBe('complaint@example.com')
-        ->and($array['type'])->toBe('complaint');
-});
-
-it('provides a human-readable label for each suppression type', function (): void {
-    expect(SuppressionType::HardBounce->label())->toBe('Hard Bounce')
-        ->and(SuppressionType::SoftBounce->label())->toBe('Soft Bounce')
-        ->and(SuppressionType::Complaint->label())->toBe('Complaint')
-        ->and(SuppressionType::Unsubscribe->label())->toBe('Unsubscribe')
-        ->and(SuppressionType::Manual->label())->toBe('Manual');
+        ->and($array['expires_at'])->toBe('2026-01-01T00:00:00Z');
 });

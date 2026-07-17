@@ -15,11 +15,14 @@ class BounceStatisticsRequest extends Request
         private readonly ?string $fromTime = null,
         private readonly ?string $toTime = null,
         private readonly ?string $senderDomain = null,
+        private readonly ?string $recipientDomains = null,
+        private readonly ?string $tags = null,
+        private readonly ?string $groupBy = null,
     ) {}
 
     public function resolveEndpoint(): string
     {
-        return '/reports/bounces';
+        return '/statistics/transactional/bounce';
     }
 
     /**
@@ -39,6 +42,18 @@ class BounceStatisticsRequest extends Request
 
         if ($this->senderDomain !== null) {
             $query['sender_domain'] = $this->senderDomain;
+        }
+
+        if ($this->recipientDomains !== null) {
+            $query['recipient_domains'] = $this->recipientDomains;
+        }
+
+        if ($this->tags !== null) {
+            $query['tags'] = $this->tags;
+        }
+
+        if ($this->groupBy !== null) {
+            $query['group_by'] = $this->groupBy;
         }
 
         return $query;

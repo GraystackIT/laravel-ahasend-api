@@ -42,21 +42,29 @@ class MessageService
     }
 
     /**
-     * List messages with optional cursor-based pagination.
+     * List messages with optional cursor-based pagination and filters.
      *
-     * @return array{data: Message[], meta: array<string, mixed>}
+     * @return array{data: Message[], pagination: array<string, mixed>}
      * @throws AhasendException
      */
     public function list(
         ?int    $limit = null,
         ?string $after = null,
         ?string $before = null,
+        ?string $status = null,
+        ?string $sender = null,
+        ?string $recipient = null,
+        ?string $tags = null,
+        ?string $fromTime = null,
+        ?string $toTime = null,
     ): array {
         Log::info('Ahasend: listing messages', compact('limit', 'after', 'before'));
 
         try {
             $response = $this->connector->send(
-                new ListMessagesRequest($limit, $after, $before),
+                new ListMessagesRequest(
+                    $limit, $after, $before, $status, $sender, $recipient, $tags, $fromTime, $toTime,
+                ),
             );
 
             $body = $response->json();
@@ -66,7 +74,7 @@ class MessageService
                     static fn (array $item): Message => Message::fromArray($item),
                     $body['data'] ?? [],
                 ),
-                'meta' => $body['meta'] ?? [],
+                'pagination' => $body['pagination'] ?? [],
             ];
         } catch (RequestException $e) {
             Log::error('Ahasend: failed to list messages', [
