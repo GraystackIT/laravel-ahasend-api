@@ -10,19 +10,19 @@
         }
     ],
     "require": {
-        "php": "^8.2|^8.3",
+        "php": "^8.2|^8.3|^8.4",
         "illuminate/support": "^10.0|^11.0|^12.0|^13.0",
         "illuminate/http": "^10.0|^11.0|^12.0|^13.0",
         "illuminate/database": "^10.0|^11.0|^12.0|^13.0",
         "illuminate/mail": "^10.0|^11.0|^12.0|^13.0",
         "saloonphp/saloon": "^4.0",
-        "symfony/mailer": "^6.4|^7.0",
-        "symfony/mime": "^6.4|^7.0"
+        "symfony/mailer": "^6.4|^7.0|^8.0",
+        "symfony/mime": "^6.4|^7.0|^8.0"
     },
     "require-dev": {
         "orchestra/testbench": "^8.0|^9.0|^10.0|^11.0",
-        "pestphp/pest": "^3.0",
-        "pestphp/pest-plugin-laravel": "^3.0"
+        "pestphp/pest": "^3.0|^4.0",
+        "pestphp/pest-plugin-laravel": "^3.0|^4.0"
     },
     "autoload": {
         "psr-4": {

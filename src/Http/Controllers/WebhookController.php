@@ -46,7 +46,8 @@ class WebhookController extends Controller
         /** @var array<string, mixed> $data */
         $data      = (array) ($payload['data'] ?? $payload);
         $messageId = (string) ($data['id'] ?? $data['message_id'] ?? '');
-        $recipient = (string) ($data['recipient'] ?? $data['email'] ?? '');
+        // Inbound message routing carries the recipient under `to`; status events use `recipient`/`email`.
+        $recipient = (string) ($data['recipient'] ?? $data['email'] ?? $data['to'] ?? '');
 
         Log::info('Ahasend webhook received', [
             'event'      => $event,
@@ -130,6 +131,7 @@ class WebhookController extends Controller
             'message.suppressed'     => 'suppressed',
             'message.transient_error' => 'transient_error',
             'message.reception'      => 'received',
+            'message.routing'        => 'received',
             default                  => $event,
         };
 
@@ -177,7 +179,8 @@ class WebhookController extends Controller
                 $payload['reason'] ?? null,
                 $payload,
             ),
-            'message.reception'       => MailReceived::dispatch($messageId, $recipient, $payload),
+            'message.reception',
+            'message.routing'         => MailReceived::dispatch($messageId, $recipient, $payload),
             'domain.dns_error'        => DomainDnsError::dispatch(
                 $payload['domain'] ?? '',
                 $payload,

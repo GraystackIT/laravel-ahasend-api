@@ -139,6 +139,33 @@ it('dispatches MailReceived event on reception webhook', function (): void {
     });
 });
 
+it('dispatches MailReceived event on inbound message routing with recipient from the to field', function (): void {
+    Event::fake([MailReceived::class]);
+
+    // Real AhaSend message-routing payload: recipient lives in data.to (no data.recipient key).
+    postWebhook([
+        'type'      => 'message.routing',
+        'timestamp' => date('c'),
+        'data'      => [
+            'id'         => 'msg-routed',
+            'from'       => 'customer@gmail.com',
+            'to'         => 'support@yourdomain.com',
+            'subject'    => 'Help',
+            'plain_body' => 'Body',
+            'html_body'  => '<p>Body</p>',
+            'attachments' => [
+                ['filename' => 'a.pdf', 'content_type' => 'application/pdf', 'data' => base64_encode('%PDF')],
+            ],
+        ],
+    ]);
+
+    Event::assertDispatched(MailReceived::class, function (MailReceived $event): bool {
+        return $event->messageId === 'msg-routed'
+            && $event->recipient === 'support@yourdomain.com'
+            && ($event->payload['from'] ?? null) === 'customer@gmail.com';
+    });
+});
+
 it('dispatches DomainDnsError event on domain dns_error webhook', function (): void {
     Event::fake([DomainDnsError::class]);
 

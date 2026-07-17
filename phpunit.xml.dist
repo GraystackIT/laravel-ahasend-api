@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<phpunit xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:noNamespaceSchemaLocation="https://schema.phpunit.de/10.5/phpunit.xsd"
+         bootstrap="vendor/autoload.php"
+         colors="true">
+    <testsuites>
+        <testsuite name="Feature">
+            <directory>tests/Feature</directory>
+        </testsuite>
+        <testsuite name="Unit">
+            <directory>tests/Unit</directory>
+        </testsuite>
+    </testsuites>
+    <source>
+        <include>
+            <directory>src</directory>
+        </include>
+    </source>
+    <php>
+        <env name="APP_ENV" value="testing"/>
+        <!-- Dummy credentials so the connector resolves; tests use Saloon's MockClient and never hit the real API. -->
+        <env name="AHASEND_API_KEY" value="test-api-key"/>
+        <env name="AHASEND_ACCOUNT_ID" value="test-account-id"/>
+        <env name="AHASEND_FROM_ADDRESS" value="sender@example.com"/>
+        <env name="AHASEND_FROM_NAME" value="Test Sender"/>
+    </php>
+</phpunit>

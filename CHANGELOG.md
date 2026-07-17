@@ -22,17 +22,33 @@ This release corrects the package against AhaSend's current v2 API (audited 2026
 - `Suppression` DTO now exposes `id` and `expiresAt`; the `type` property and `SuppressionType` enum were removed entirely — no such field exists on the API's suppression resource (this was previously always guessed as `manual` since `type` never appeared in real responses).
 - `SuppressionService::delete()` and `deleteAll()` now accept an optional `$domain` filter, matching the real query parameters.
 - `SmtpCredential::fromArray()` default host fallback corrected from `smtp.ahasend.com` to `send.ahasend.com` (EU). AhaSend's SMTP relay never used the `smtp.ahasend.com` hostname; real hosts are `send.ahasend.com` (EU) / `send-us.ahasend.com` (US) on ports 25, 587, or 2525 — port 465 (implicit TLS) is not supported.
-- `AhasendService::send()` preserves all new optional fields when copying `EmailMessage` to assign an auto-generated UUID
 
 ### Added
 - `ListMessagesRequest` / `MessageService::list()`: new optional filters `status`, `sender`, `recipient`, `tags`, `from_time`, `to_time`.
 - `ListSuppressionsRequest` / `SuppressionService::list()`: new optional filters `from_time`, `to_time`.
 - `BounceStatisticsRequest` / `DeliveryTimeAnalyticsRequest`: new optional filters `recipient_domains`, `tags`, `group_by`, matching the full parameter set already supported by the deliverability endpoint.
 - `EmailMessage` DTO: new optional send fields `replyTo`, `headers`, `ampContent`, `sandbox` (boolean, distinct from the existing `sandboxResult` enum) — passed through to all four send request classes.
+
+---
+
+## [0.1.1] - 2026-06-19
+
+### Fixed
+- Inbound **message routing** now dispatches `MailReceived`. AhaSend delivers inbound emails as `message.routing` (not `message.reception`) with the recipient under `data.to`; the webhook controller now handles that event type and resolves the recipient from `recipient` / `email` / `to`. Previously inbound mail was logged as an "unhandled event" and dropped.
+
+## [0.1.0] - 2026-06-19
+
+### Added
 - `EmailMessage` DTO: new optional send fields `tags`, `tracking`, `schedule`, `retention`, `substitutions`, `sandboxResult` — passed through to all four send request classes
 - New webhook events: `MailClicked`, `MailSuppressed`, `MailTransientError`, `MailReceived`, `DomainDnsError`, `SuppressionCreated`
 - `WebhookController` now dispatches all six new event types and maps them to correct status strings in the database driver
 - Guard in `WebhookController::persistStatusUpdate()` to skip DB update for non-message events (e.g. `domain.dns_error`, `suppression.created`) that carry no message ID
+- `phpunit.xml.dist` with the test suites and dummy AhaSend credentials, so the test suite is self-contained and no longer depends on environment variables being present
+- `scripts/release.sh` release helper (semver tag bump + CHANGELOG roll + tag/push), mirroring the other GraystackIT packages
+
+### Changed
+- Laravel 13 / Symfony 8 support: widened `symfony/mailer` and `symfony/mime` to `^6.4|^7.0|^8.0` and `php` to `^8.2|^8.3|^8.4`. The package now installs cleanly alongside Laravel 13 (which ships Symfony 8); the `AhaSendTransport` API surface is unchanged
+- `AhasendService::send()` preserves all new optional fields when copying `EmailMessage` to assign an auto-generated UUID
 - `SendConversationalEmailRequest` applies all optional fields except `substitutions` (the conversational endpoint does not support template substitution)
 
 ---
