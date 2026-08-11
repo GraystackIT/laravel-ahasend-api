@@ -692,6 +692,21 @@ $message->raw;                  // anything not modelled yet
 Set `AHASEND_INBOUND_BASE_URL` to the publicly reachable URL of the application — AhaSend
 has to be able to POST to it, and route provisioning fails loudly if it is missing.
 
+### Routes created in the dashboard
+
+Prefer letting the package provision routes: it generates the URL, stores the secret and
+needs nothing pasted. For a route that already exists — created by hand, or whose local
+record was lost — adopt it once:
+
+```bash
+php artisan ahasend:routes:import rt_abc123 --secret=whsec_from_the_dashboard
+```
+
+The secret has to come from the dashboard because Ahasend returns it only at creation. The
+command stores it and repoints the route at this application's inbound endpoint, since that
+URL carries the id the secret is looked up by. `--keep-url` skips the repointing, in which
+case inbound mail keeps going wherever the route pointed before.
+
 ---
 
 ## Testing

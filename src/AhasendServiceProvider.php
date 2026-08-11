@@ -6,6 +6,7 @@ namespace GraystackIT\Ahasend;
 
 use GraystackIT\Ahasend\Connectors\AhasendConnector;
 use GraystackIT\Ahasend\Console\ExpireDomainsCommand;
+use GraystackIT\Ahasend\Console\ImportRouteCommand;
 use GraystackIT\Ahasend\Console\PollDomainsCommand;
 use GraystackIT\Ahasend\Mail\AhaSendTransport;
 use GraystackIT\Ahasend\Services\DomainManager;
@@ -96,6 +97,7 @@ class AhasendServiceProvider extends ServiceProvider
             $this->commands([
                 PollDomainsCommand::class,
                 ExpireDomainsCommand::class,
+                ImportRouteCommand::class,
             ]);
 
             // Publish config.
