@@ -653,14 +653,34 @@ the `ahasend_domains_owner_unverified_unique` index.
 
 ## Inbound mail
 
-AhaSend routes are account-level objects matched by a `recipient` pattern, and the owning
-domain is derived from that pattern — there is **no account-wide catch-all across domains**.
-Every domain that should receive mail needs its own route, which `RouteManager` provisions
-automatically the moment a domain verifies.
+A route's `recipient` pattern is domain-bound — `*` means every address on *that* domain —
+so each receiving domain needs its own route, and AhaSend generates a separate signing
+secret for each. There is no account-wide catch-all across domains, and the secret cannot be
+supplied when creating a route.
 
-Each route carries **its own signing secret**, returned only once when it is created. The
-inbound endpoint therefore takes the route in its path (`/ahasend/inbound/{route}`) and
-verifies against that route's secret, separately from the account-wide webhook secret.
+That leaves two ways to hold those secrets, and the package serves both:
+
+| Endpoint | For | Secret |
+| --- | --- | --- |
+| `POST /ahasend/webhook` | delivery, bounces, suppressions, `domain.dns_error` | `AHASEND_WEBHOOK_SECRET` |
+| `POST /ahasend/inboundmail` | routes you create in the dashboard | `AHASEND_INBOUND_SECRET` |
+| `POST /ahasend/inbound/{route}` | routes the package provisions per customer domain | stored with the route |
+
+**Use the dashboard for your own domains.** They are few and known up front, so create the
+route by hand, point it at `/ahasend/inboundmail` and put its secret in the environment.
+Several routes are fine — `AHASEND_INBOUND_SECRET` takes a comma-separated list, and a
+payload is accepted when it matches any of them:
+
+```dotenv
+AHASEND_INBOUND_SECRET=whsec_postboxes,whsec_tickets
+```
+
+**The stored-secret path is for customer domains**, where `RouteManager` provisions a route
+the moment a domain verifies. There is no chance to put those secrets in a config file, so
+the route id in the URL is what the stored secret is looked up by. Nobody ever handles them.
+
+With no secret configured, `/ahasend/inboundmail` answers `503` rather than accepting
+unverified mail on a public endpoint.
 
 ```php
 use GraystackIT\Ahasend\Events\InboundMailReceived;

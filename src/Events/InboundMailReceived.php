@@ -19,9 +19,14 @@ class InboundMailReceived
 {
     use Dispatchable;
 
+    /**
+     * @param  AhasendRoute|null  $route  The provisioned route this arrived on, if any.
+     *                                    Null for a route managed in the dashboard and
+     *                                    verified against a configured secret.
+     */
     public function __construct(
         public readonly InboundMessage $message,
-        public readonly AhasendRoute $route,
         public readonly string $deliveryId,
+        public readonly ?AhasendRoute $route = null,
     ) {}
 }

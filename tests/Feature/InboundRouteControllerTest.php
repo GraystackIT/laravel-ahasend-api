@@ -71,9 +71,57 @@ it('accepts a correctly signed payload and fires the event', function (): void {
     Event::assertDispatched(InboundMailReceived::class, function (InboundMailReceived $event) use ($route): bool {
         return $event->message->messageId === 'msg-abc'
             && $event->message->from === 'kunde@example.com'
-            && $event->route->is($route)
+            && $event->route?->is($route) === true
             && $event->deliveryId === 'whmsg_1';
     });
+});
+
+// ─── Dashboard-managed routes, verified against configured secrets ────────
+
+it('accepts a payload signed with a configured secret', function (): void {
+    Event::fake([InboundMailReceived::class]);
+
+    config()->set('ahasend.inbound.secrets', ['whsec_env_one', 'whsec_env_two']);
+
+    $payload = routingPayload();
+
+    $this->withHeaders(signedHeaders($payload, 'whsec_env_two'))
+        ->postJson('/ahasend/inboundmail', $payload)
+        ->assertOk();
+
+    Event::assertDispatched(InboundMailReceived::class, function (InboundMailReceived $event): bool {
+        // No stored route: this one was managed in the dashboard.
+        return $event->route === null && $event->message->messageId === 'msg-abc';
+    });
+});
+
+it('rejects a payload that matches none of the configured secrets', function (): void {
+    Event::fake([InboundMailReceived::class]);
+
+    config()->set('ahasend.inbound.secrets', ['whsec_env_one']);
+
+    $payload = routingPayload();
+
+    $this->withHeaders(signedHeaders($payload, 'whsec_wrong'))
+        ->postJson('/ahasend/inboundmail', $payload)
+        ->assertUnauthorized();
+
+    Event::assertNotDispatched(InboundMailReceived::class);
+});
+
+it('refuses inbound mail when no secret is configured at all', function (): void {
+    Event::fake([InboundMailReceived::class]);
+
+    // An empty secret must not mean "accept anything" on a public endpoint.
+    config()->set('ahasend.inbound.secrets', []);
+
+    $payload = routingPayload();
+
+    $this->withHeaders(signedHeaders($payload, 'whsec_anything'))
+        ->postJson('/ahasend/inboundmail', $payload)
+        ->assertStatus(503);
+
+    Event::assertNotDispatched(InboundMailReceived::class);
 });
 
 it('rejects a payload signed with the wrong secret', function (): void {

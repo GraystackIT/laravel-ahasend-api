@@ -103,19 +103,33 @@ return [
     | Inbound Message Routing
     |--------------------------------------------------------------------------
     |
-    | Inbound routes are account-level objects matched by a `recipient` pattern,
-    | and Ahasend derives the owning domain from that pattern — so every domain
-    | that should receive mail needs its own route. Each route carries its own
-    | signing secret, which is why the endpoint takes the route id in the path.
+    | A route's `recipient` pattern is domain-bound — `*` means every address on
+    | that one domain — so each receiving domain needs its own route, and Ahasend
+    | generates a separate signing secret for each. There are two ways to hold
+    | those secrets, and both endpoints are always available:
     |
-    | - path:     URI prefix of the inbound endpoint; the route id is appended.
-    | - base_url: public base URL registered with Ahasend. Defaults to APP_URL.
-    | - defaults: options every provisioned route is created with.
+    | 1. Routes you manage in the dashboard (the application's own domains) point
+    |    at `static_path` and are verified against `secrets` below. Nothing else
+    |    to configure.
+    | 2. Routes the application provisions per customer domain point at
+    |    `path/{route}` — their secrets are generated at creation and stored with
+    |    the route, since there is no chance to put them in a config file.
+    |
+    | - secrets:     one or more route signing secrets, comma-separated.
+    | - static_path: endpoint for dashboard-managed routes.
+    | - path:        endpoint prefix for provisioned routes; the id is appended.
+    | - base_url:    public base URL registered with Ahasend. Defaults to APP_URL.
+    | - defaults:    options every provisioned route is created with.
     |
     */
     'inbound' => [
-        'path'     => env('AHASEND_INBOUND_PATH', 'ahasend/inbound'),
-        'base_url' => env('AHASEND_INBOUND_BASE_URL', env('APP_URL')),
+        'secrets'     => array_values(array_filter(array_map(
+            'trim',
+            explode(',', (string) env('AHASEND_INBOUND_SECRET', '')),
+        ))),
+        'static_path' => env('AHASEND_INBOUND_STATIC_PATH', 'ahasend/inboundmail'),
+        'path'        => env('AHASEND_INBOUND_PATH', 'ahasend/inbound'),
+        'base_url'    => env('AHASEND_INBOUND_BASE_URL', env('APP_URL')),
         'defaults' => [
             'attachments'         => (bool) env('AHASEND_INBOUND_ATTACHMENTS', true),
             'headers'             => (bool) env('AHASEND_INBOUND_HEADERS', true),
