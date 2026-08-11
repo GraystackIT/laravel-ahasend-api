@@ -46,6 +46,17 @@ final class EmailMessage
     ) {}
 
     /**
+     * Return a copy carrying the given message id, preserving every other field.
+     *
+     * Reconstructing this object by hand silently drops fields whenever a new
+     * property is added, so callers must use this instead.
+     */
+    public function withMessageId(string $messageId): self
+    {
+        return self::fromArray([...$this->toArray(), 'message_id' => $messageId]);
+    }
+
+    /**
      * Build from a flat array (useful in Mailable trait and tests).
      *
      * @param  array<string, mixed>  $data

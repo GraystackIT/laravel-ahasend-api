@@ -591,6 +591,109 @@ try {
 
 ---
 
+## Domains
+
+Domain management is stateful: the package keeps an `ahasend_domains` row alongside the
+remote object so an application can show verification progress without polling the API on
+every page load. Run the migrations before using it.
+
+```php
+use GraystackIT\Ahasend\Services\DomainManager;
+
+$domains = app(DomainManager::class);
+
+// $owner is any Eloquent model — the package never interprets it.
+$domain = $domains->add('acme.at', $owner);
+
+foreach ($domain->outstandingRecords() as $record) {
+    echo "{$record->type->value}  {$record->host}  {$record->content}";
+}
+```
+
+### Verification is poll-driven, not webhook-driven
+
+AhaSend emits **no event when a domain becomes valid** — the only domain event is
+`domain.dns_error`. A domain therefore only ever moves forward through an explicit check:
+
+```php
+$domain = $domains->refresh($domain);   // "check DNS" button
+
+$domain->isVerified();                  // true once every required record propagated
+```
+
+Schedule the poll so pending domains progress without anyone pressing a button, and the
+expiry so an abandoned domain does not occupy its owner's slot forever:
+
+```php
+Schedule::command('ahasend:domains:poll')->hourly();
+Schedule::command('ahasend:domains:expire')->daily();
+```
+
+### One open domain per owner
+
+`DomainManager::add()` refuses a new domain while the owner still holds an unverified one,
+so an account cannot fill up with abandoned domains. On Postgres a partial unique index
+enforces the same rule at the database level, which is what settles two simultaneous adds.
+Owner-less domains — an application's own shared domains — are exempt.
+
+```php
+use GraystackIT\Ahasend\Exceptions\DomainLimitExceededException;
+
+try {
+    $domains->add('second.at', $owner);
+} catch (DomainLimitExceededException $e) {
+    $e->blockingDomains;   // ['first.at'] — offer "check DNS" or "delete" for these
+}
+```
+
+Raise the ceiling with `AHASEND_MAX_UNVERIFIED_DOMAINS`; going above 1 also means dropping
+the `ahasend_domains_owner_unverified_unique` index.
+
+---
+
+## Inbound mail
+
+AhaSend routes are account-level objects matched by a `recipient` pattern, and the owning
+domain is derived from that pattern — there is **no account-wide catch-all across domains**.
+Every domain that should receive mail needs its own route, which `RouteManager` provisions
+automatically the moment a domain verifies.
+
+Each route carries **its own signing secret**, returned only once when it is created. The
+inbound endpoint therefore takes the route in its path (`/ahasend/inbound/{route}`) and
+verifies against that route's secret, separately from the account-wide webhook secret.
+
+```php
+use GraystackIT\Ahasend\Events\InboundMailReceived;
+
+class RouteInboundMail
+{
+    public function handle(InboundMailReceived $event): void
+    {
+        // Queue the real work: AhaSend retries on any non-2xx response, so slow
+        // synchronous handling produces duplicates. $deliveryId is stable across
+        // those retries — use it as the idempotency key.
+        ProcessInboundMail::dispatch($event->message, $event->deliveryId);
+    }
+}
+```
+
+`InboundMessage` normalises the payload:
+
+```php
+$message->text();               // reply-stripped body when the route produced one
+$message->parentMessageIds();   // In-Reply-To, then References newest-first
+$message->isAutomated();        // Auto-Submitted / Precedence / List-Id / X-Auto-Response-Suppress
+$message->inlineAttachments();  // parts referenced by cid: in the HTML body
+$message->attachments[0]->contents();   // decoded bytes
+$message->spamScore;
+$message->raw;                  // anything not modelled yet
+```
+
+Set `AHASEND_INBOUND_BASE_URL` to the publicly reachable URL of the application — AhaSend
+has to be able to POST to it, and route provisioning fails loudly if it is missing.
+
+---
+
 ## Testing
 
 ```bash

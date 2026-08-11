@@ -27,6 +27,17 @@ abstract class TestCase extends OrchestraTestCase
      */
     protected function defineEnvironment($app): void
     {
+        // Route secrets use the `encrypted` cast, which needs a key.
+        $app['config']->set('app.key', 'base64:' . base64_encode(random_bytes(32)));
+
+        // The package ships its own tables, so every test needs a database.
+        $app['config']->set('database.default', 'testing');
+        $app['config']->set('database.connections.testing', [
+            'driver'   => 'sqlite',
+            'database' => ':memory:',
+            'prefix'   => '',
+        ]);
+
         $app['config']->set('ahasend.api_key', config('ahasend.api_key'));
         $app['config']->set('ahasend.account_id', config('ahasend.account_id'));
         $app['config']->set('ahasend.base_url', config('ahasend.base_url'));
@@ -35,6 +46,8 @@ abstract class TestCase extends OrchestraTestCase
         $app['config']->set('ahasend.store_logs', false);
         $app['config']->set('ahasend.storage_driver', 'log');
         $app['config']->set('ahasend.webhook.secret', null);
+        $app['config']->set('ahasend.inbound.base_url', 'https://app.test');
+        $app['config']->set('ahasend.inbound.path', 'ahasend/inbound');
         $app['config']->set('ahasend.retry.times', 1);
         $app['config']->set('ahasend.retry.delay', 0);
     }

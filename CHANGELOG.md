@@ -23,6 +23,24 @@ This release corrects the package against AhaSend's current v2 API (audited 2026
 - `SuppressionService::delete()` and `deleteAll()` now accept an optional `$domain` filter, matching the real query parameters.
 - `SmtpCredential::fromArray()` default host fallback corrected from `smtp.ahasend.com` to `send.ahasend.com` (EU). AhaSend's SMTP relay never used the `smtp.ahasend.com` hostname; real hosts are `send.ahasend.com` (EU) / `send-us.ahasend.com` (US) on ports 25, 587, or 2525 — port 465 (implicit TLS) is not supported.
 
+### Added — domain management, inbound routing
+
+- **Domains API**: `CreateDomainRequest`, `GetDomainRequest`, `ListDomainsRequest`, `UpdateDomainRequest`, `CheckDomainDnsRequest`, `DeleteDomainRequest`, the `Domain` / `DnsRecord` DTOs, the `DnsRecordType` enum and `DomainService`.
+- **Routes API** (inbound message routing): `CreateRouteRequest`, `GetRouteRequest`, `ListRoutesRequest`, `UpdateRouteRequest`, `DeleteRouteRequest`, the `Route` DTO and `RouteService`.
+- **Persistence**: `ahasend_domains` and `ahasend_routes` tables with the `AhasendDomain` / `AhasendRoute` models. A domain carries an optional polymorphic owner so a consuming application can associate it with one of its own records without this package knowing what that record is.
+- **`DomainManager`** — the domain lifecycle: `add()`, `refresh()`, `delete()`, `expirePending()`, `markDnsError()`. **AhaSend sends no event when a domain becomes valid** (the only domain event is `domain.dns_error`), so verification is poll-driven: an explicit DNS check on demand, plus the `ahasend:domains:poll` command.
+- **One-open-domain-per-owner guard** in `DomainManager::add()`, ceiling configurable via `ahasend.domains.max_unverified_per_owner` (default 1) and backed on Postgres by a partial unique index, so two concurrent adds cannot slip past the application check. Owner-less domains are exempt. `ahasend:domains:expire` removes domains that stayed unverified past `pending_expiry_days` (default 14) so a typo cannot occupy a slot forever.
+- **`RouteManager`** provisions a catch-all inbound route (`*@{domain}`) when a domain becomes verified, and retires it on delete. AhaSend's routes have no `domain` field — the owning domain is derived from the `recipient` pattern and must already be verified — so **each domain needs its own route**; there is no account-wide catch-all.
+- **Inbound endpoint** `POST {ahasend.inbound.path}/{route}` with `InboundRouteController`, the normalised `InboundMessage` / `InboundAttachment` DTOs and the `InboundMailReceived` event. Every route signs with **its own secret**, returned only once at creation, which is why the route is identified in the path rather than sharing the account-wide webhook secret. Listeners must queue their work — AhaSend retries on any non-2xx, and `InboundMailReceived::$deliveryId` is the idempotency key.
+- Lifecycle events: `DomainCreated`, `DomainVerified`, `DomainVerificationFailed`, `DomainExpired`, `DomainDeleted`, `InboundRouteProvisioned`.
+- `Idempotency-Key` header on every write request, via the `HasIdempotencyKey` trait.
+- `EmailMessage::withMessageId()` — returns a copy carrying a message id while preserving every other field.
+- New config sections `ahasend.domains` and `ahasend.inbound`.
+
+### Fixed
+- **No request ever sent a body.** None of the POST/PUT request classes implemented `Saloon\Contracts\Body\HasBody`, and Saloon only reads `defaultBody()` from requests that do — so `SendEmailRequest`, `SendHtmlEmailRequest`, `SendEmailWithAttachmentsRequest`, `SendConversationalEmailRequest`, `CreateSuppressionRequest` and `CreateSmtpCredentialRequest` all went out with an empty body. They now implement `HasBody` and use `HasJsonBody`.
+- `WebhookController` now degrades the affected domain to `failed` on `domain.dns_error` instead of only announcing it. Signature verification moved into the shared `VerifiesWebhookSignature` trait.
+
 ### Added
 - `ListMessagesRequest` / `MessageService::list()`: new optional filters `status`, `sender`, `recipient`, `tags`, `from_time`, `to_time`.
 - `ListSuppressionsRequest` / `SuppressionService::list()`: new optional filters `from_time`, `to_time`.
