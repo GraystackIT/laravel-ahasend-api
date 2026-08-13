@@ -137,6 +137,18 @@ it('threads an auto-reply like any other reply', function (): void {
         ->and($message->parentMessageIds()[0])->toContain('@tickets.graystack.one');
 });
 
+it('catches bulk mail by List-Id when nothing else marks it', function (): void {
+    $message = InboundMessage::fromArray(payloadFixture('inbound-bulk-newsletter'));
+
+    // A real newsletter carries neither `auto_submitted` nor `Precedence` —
+    // `List-Id` is the only marker, and without checking it a mailing list
+    // subscribed to a ticket address would be answered like a customer.
+    expect($message->isAutomated())->toBeTrue()
+        ->and($message->autoSubmitted)->toBeNull()
+        ->and($message->header('Precedence'))->toBeNull()
+        ->and($message->header('List-Id'))->toBe('<aida.mxmail.bounce.aida.de>');
+});
+
 it('exposes the assigned message id on the outbound reception event', function (): void {
     $data = payloadFixture('outbound-reception-with-message-id');
 

@@ -1,0 +1,50 @@
+{
+    "headers": {
+        "webhook-id": "019ffc2b-3482-7db7-9c55-294487730368",
+        "webhook-timestamp": "1786642118"
+    },
+    "delivered_for_domain": "tickets.graystack.one",
+    "payload": {
+        "type": "message.routing",
+        "timestamp": "2026-08-13T17:28:34Z",
+        "route_id": "df7de7f3-7e6a-4c6e-b553-903601440f06",
+        "data": {
+            "id": "695fbfae973c11f1b1e3920006d48774",
+            "from": "aida@aida.de",
+            "reply_to": "<aida@aida.de>",
+            "to": "liste.probe@tickets.graystack.one",
+            "subject": "Jetzt Ihre Anmeldung beim AIDA Newsletter bestätigen!",
+            "message_id": "<INXCOM3.aida.m.nj675qvsyuq2jrajwreq.jkm4ftoeh5hc5kzgnh22okufb4@bounce.aida.de>",
+            "size": 9522,
+            "spam_score": 0,
+            "bounce": false,
+            "cc": null,
+            "date": "Thu, 13 Aug 2026 19:28:33 +0200",
+            "in_reply_to": null,
+            "references": null,
+            "auto_submitted": null,
+            "html_body": "<p>Bitte bestaetigen Sie Ihre Anmeldung.</p>",
+            "plain_body": "Bitte bestaetigen Sie Ihre Anmeldung.",
+            "reply_from_plain_body": "Bitte bestaetigen Sie Ihre Anmeldung.",
+            "attachments": [],
+            "headers": {
+                "Content-Transfer-Encoding": "quoted-printable",
+                "Content-Type": "text/html; charset=\"utf-8\"",
+                "Date": "Thu, 13 Aug 2026 19:28:33 +0200",
+                "Dkim-Signature": "<redacted>",
+                "Feedback-Id": "xcom-aida-mx:xcom-aida:mx:inxmailde",
+                "From": "\"AIDA News\" <aida@aida.de>",
+                "List-Help": "<https://www.aida.de/aida-cruises/kundenkommunikation.40901.html>",
+                "List-Id": "<aida.mxmail.bounce.aida.de>",
+                "Message-Id": "<INXCOM3.aida.m.nj675qvsyuq2jrajwreq.jkm4ftoeh5hc5kzgnh22okufb4@bounce.aida.de>",
+                "Mime-Version": "1.0",
+                "Received": "from inxmx170.inxserver.de (93.191.162.129) by send.ahasend.com (KumoMTA 138.199.133.242) with ESMTPS (TLSv1_3:TLS13_AES_256_GCM_SHA384) id 695fbfae973c11f1b1e3920006d48774 for <liste.probe@tickets.graystack.one>; Thu, 13 Aug 2026 17:28:34 +0000",
+                "Reply-To": "<aida@aida.de>",
+                "Subject": "Jetzt Ihre Anmeldung beim AIDA Newsletter bestätigen!",
+                "To": "<liste.probe@tickets.graystack.one>",
+                "X-Csa-Complaints": "csa-complaints@eco.de",
+                "X-Customer-Id": "4cb423b9-7a62-4e23-bf3c-e22b2c20bce4"
+            }
+        }
+    }
+}
