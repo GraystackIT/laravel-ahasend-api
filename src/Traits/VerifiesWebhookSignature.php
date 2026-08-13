@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace GraystackIT\Ahasend\Traits;
 
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Log;
 
 /**
  * Verifies a Standard Webhooks signature.
@@ -36,10 +37,22 @@ trait VerifiesWebhookSignature
         $signature = (string) $request->header('webhook-signature', '');
 
         if ($messageId === '' || $timestamp === '' || $signature === '') {
+            Log::warning('Ahasend: signature headers missing', [
+                'has_id'        => $messageId !== '',
+                'has_timestamp' => $timestamp !== '',
+                'has_signature' => $signature !== '',
+            ]);
+
             return false;
         }
 
         if (! $this->timestampIsFresh($timestamp)) {
+            Log::warning('Ahasend: signed timestamp outside the tolerance window', [
+                'timestamp' => $timestamp,
+                'now'       => time(),
+                'tolerance' => (int) config('ahasend.inbound.tolerance', 300),
+            ]);
+
             return false;
         }
 
@@ -53,6 +66,13 @@ trait VerifiesWebhookSignature
                 return true;
             }
         }
+
+        // The secret is wrong for this delivery — the most common cause being a
+        // route pointed at the event-webhook endpoint, where it is checked
+        // against the account secret instead of its own.
+        Log::warning('Ahasend: signature does not match the secret used', [
+            'webhook_id' => $messageId,
+        ]);
 
         return false;
     }
