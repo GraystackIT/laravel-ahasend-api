@@ -80,6 +80,40 @@ it('provides a spam score and no automation markers on a human reply', function 
         ->and($message->isAutomated())->toBeFalse();
 });
 
+it('reads attachment metadata under the names Ahasend actually uses', function (): void {
+    $message = InboundMessage::fromArray(payloadFixture('inbound-with-attachments'));
+
+    // `filename`, `content_type`, `data`, `disposition` — not `file_name`,
+    // `mime_type` or `content`, which earlier guesses had assumed.
+    expect($message->attachments)->toHaveCount(4)
+        ->and($message->attachments[2]->fileName)->toBe('Biohort_ATAA93AD.pdf')
+        ->and($message->attachments[2]->contentType)->toBe('application/pdf')
+        ->and($message->attachments[3]->contentType)->toBe('application/zip');
+});
+
+it('treats plain attachments as not inline even without a content id', function (): void {
+    $message = InboundMessage::fromArray(payloadFixture('inbound-with-attachments'));
+
+    expect($message->inlineAttachments())->toBeEmpty();
+
+    foreach ($message->attachments as $attachment) {
+        expect($attachment->inline)->toBeFalse()
+            ->and($attachment->contentId)->toBeNull();
+    }
+});
+
+it('recognises an inline image by its disposition and links it to the body', function (): void {
+    $message = InboundMessage::fromArray(payloadFixture('inbound-with-inline-image'));
+
+    $inline = $message->inlineAttachments();
+
+    expect($inline)->toHaveCount(1)
+        ->and($inline[0]->contentId)->toBe('a229a73a9fca82db075c3a8397e297b1@infomaniak')
+        // The body references exactly that id, which is what makes rewriting
+        // `cid:` links to stored documents possible later on.
+        ->and($message->htmlBody)->toContain('cid:' . $inline[0]->contentId);
+});
+
 it('exposes the assigned message id on the outbound reception event', function (): void {
     $data = payloadFixture('outbound-reception-with-message-id');
 
