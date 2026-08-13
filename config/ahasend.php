@@ -113,8 +113,9 @@ return [
     |    domain to signing secret. The secret that verifies a payload is what
     |    authenticates the delivery domain, and consumers branch on that: a mail
     |    addressed to two of your domains matches two routes and is delivered
-    |    twice, with the same address list in both payloads. Only the signature
-    |    tells the two deliveries apart.
+    |    twice, so each delivery has to reach exactly one consumer. The payload's
+    |    own `to` names the routed recipient and would answer the same question,
+    |    but the verified domain is authenticated rather than merely transmitted.
     | 2. Routes the application provisions per customer domain point at
     |    `path/{route}` — their secrets are generated at creation and stored with
     |    the route, since there is no chance to put them in a config file.
