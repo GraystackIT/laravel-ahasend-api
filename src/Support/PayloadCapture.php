@@ -11,11 +11,20 @@ use Illuminate\Support\Facades\Log;
  * Writes verified Ahasend payloads out as files.
  *
  * Real payloads are the only reliable source for what Ahasend actually sends,
- * and writing them down once turns them into test fixtures. They carry personal
- * data and attachment bytes, so nothing is written unless a path is configured.
+ * and writing them down once turns them into test fixtures.
+ *
+ * Only ever active in local and testing environments. Payloads carry personal
+ * data and base64 attachment bytes, and nothing here caps or prunes what it
+ * writes — on a production system that is a disk filling with personal data.
+ * A configured path is therefore not enough; the environment gate makes it
+ * impossible rather than merely switched off by default.
  */
 final class PayloadCapture
 {
+    /** Environments the capture may run in. */
+    private const ALLOWED_ENVIRONMENTS = ['local', 'testing'];
+
+
     /**
      * Store a payload under the configured capture path.
      *
@@ -28,6 +37,14 @@ final class PayloadCapture
         $path = trim((string) config('ahasend.inbound.capture_path', ''));
 
         if ($path === '') {
+            return;
+        }
+
+        if (! app()->environment(self::ALLOWED_ENVIRONMENTS)) {
+            Log::warning('Ahasend: payload capture is configured but only runs locally', [
+                'environment' => app()->environment(),
+            ]);
+
             return;
         }
 

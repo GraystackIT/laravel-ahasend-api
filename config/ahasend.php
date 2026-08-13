@@ -139,10 +139,11 @@ return [
         'secrets'     => GraystackIT\Ahasend\Support\InboundSecrets::parse(
             env('AHASEND_INBOUND_SECRETS'),
         ),
-        // Directory to write every verified inbound payload to, one JSON file
-        // per delivery. Meant for capturing real payloads as test fixtures;
-        // they contain personal data and attachment bytes, so leave it unset
-        // outside development.
+        // Directory to write every verified payload to, one JSON file per
+        // delivery, for capturing real payloads as test fixtures. Runs only in
+        // the local and testing environments: payloads carry personal data and
+        // base64 attachment bytes, and nothing prunes them, so a path set on a
+        // production system is ignored rather than obeyed.
         'capture_path' => env('AHASEND_INBOUND_CAPTURE_PATH'),
         'static_path' => env('AHASEND_INBOUND_STATIC_PATH', 'ahasend/inboundmail'),
         'path'        => env('AHASEND_INBOUND_PATH', 'ahasend/inbound'),
