@@ -1,0 +1,19 @@
+{
+    "headers": {
+        "webhook-id": "019ffc28-2779-7db7-abb6-f46a90eb90d5",
+        "webhook-timestamp": "1786641918"
+    },
+    "payload": {
+        "type": "suppression.created",
+        "timestamp": "2026-08-13T17:25:17.788363Z",
+        "webhook_id": "33d5637f-207e-4007-9a04-4a7ea971e96b",
+        "data": {
+            "account_id": "4cb423b9-7a62-4e23-bf3c-e22b2c20bce4",
+            "recipient": "kein-postfach@example.com",
+            "created_at": "2026-08-13T17:25:17.788363Z",
+            "expires_at": "2026-09-12T17:25:17.776972Z",
+            "reason": "Invalid Recipient",
+            "sending_domain": "tickets.graystack.one"
+        }
+    }
+}

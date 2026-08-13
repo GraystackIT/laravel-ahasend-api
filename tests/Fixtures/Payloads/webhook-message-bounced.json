@@ -1,0 +1,21 @@
+{
+    "headers": {
+        "webhook-id": "019ffc28-277d-7db7-8e2b-34b65e67efe5",
+        "webhook-timestamp": "1786641918"
+    },
+    "payload": {
+        "type": "message.bounced",
+        "timestamp": "2026-08-13T17:25:17Z",
+        "webhook_id": "33d5637f-207e-4007-9a04-4a7ea971e96b",
+        "data": {
+            "account_id": "4cb423b9-7a62-4e23-bf3c-e22b2c20bce4",
+            "event": "on_bounced",
+            "from": "bounce.probe@tickets.graystack.one",
+            "recipient": "kein-postfach@example.com",
+            "subject": "Bounce-Probe",
+            "message_id_header": "<019ffc28-236b-7922-aa5d-8f75d2c02e31@tickets.graystack.one>",
+            "is_bot": false,
+            "id": "f36af6e1973b11f1a24b960004260a38"
+        }
+    }
+}

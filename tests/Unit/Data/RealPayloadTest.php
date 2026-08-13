@@ -3,6 +3,7 @@
 declare(strict_types=1);
 
 use GraystackIT\Ahasend\Data\InboundMessage;
+use GraystackIT\Ahasend\Events\MailBounced;
 
 /**
  * These fixtures are real Ahasend payloads, captured from live mail and
@@ -143,4 +144,30 @@ it('exposes the assigned message id on the outbound reception event', function (
     // the assigned one can be learned — and it is what a later reply cites.
     expect($data['message_id_header'])->toStartWith('<019ffc12-')
         ->and($data['message_id_header'])->toContain('@tickets.graystack.one');
+});
+
+it('matches a bounce to its outbound mail through the same message id', function (): void {
+    $bounce = new MailBounced(
+        messageId: payloadFixture('webhook-message-bounced')['id'],
+        recipient: payloadFixture('webhook-message-bounced')['recipient'],
+        bounceType: payloadFixture('webhook-message-bounced')['bounce_type'] ?? null,
+        payload: payloadFixture('webhook-message-bounced'),
+    );
+
+    // One anchor for both directions: a reply cites this id in In-Reply-To, a
+    // bounce reports it here.
+    expect($bounce->outboundMessageId())->toContain('@tickets.graystack.one')
+        ->and($bounce->recipient)->toStartWith('kein-postfach@')
+        // Ahasend states no reason on the bounce itself.
+        ->and($bounce->bounceType)->toBeNull();
+});
+
+it('gets the bounce reason from the suppression event instead', function (): void {
+    $data = payloadFixture('webhook-suppression-created');
+
+    // This is where "why" lives, and what separates a hard bounce from a soft
+    // one for an application that has to decide whether to stop sending.
+    expect($data['reason'])->toBe('Invalid Recipient')
+        ->and($data['recipient'])->toStartWith('kein-postfach@')
+        ->and($data['expires_at'])->not->toBeEmpty();
 });
