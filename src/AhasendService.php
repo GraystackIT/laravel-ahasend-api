@@ -37,28 +37,7 @@ class AhasendService
     {
         // Ensure a message_id exists so webhook events can be correlated.
         if ($message->messageId === null) {
-            $message = new EmailMessage(
-                fromEmail:     $message->fromEmail,
-                fromName:      $message->fromName,
-                to:            $message->to,
-                subject:       $message->subject,
-                htmlContent:   $message->htmlContent,
-                textContent:   $message->textContent,
-                cc:            $message->cc,
-                bcc:           $message->bcc,
-                attachments:   $message->attachments,
-                messageId:     (string) Str::uuid(),
-                tags:          $message->tags,
-                tracking:      $message->tracking,
-                schedule:      $message->schedule,
-                retention:     $message->retention,
-                substitutions: $message->substitutions,
-                sandboxResult: $message->sandboxResult,
-                replyTo:       $message->replyTo,
-                headers:       $message->headers,
-                ampContent:    $message->ampContent,
-                sandbox:       $message->sandbox,
-            );
+            $message = $message->withMessageId((string) Str::uuid());
         }
 
         Log::info('Ahasend: sending email', [

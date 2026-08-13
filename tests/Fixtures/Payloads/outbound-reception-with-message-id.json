@@ -1,0 +1,21 @@
+{
+    "headers": {
+        "webhook-id": "019ffc12-42f4-7db7-881c-28b697dc727a",
+        "webhook-timestamp": "1786640483"
+    },
+    "payload": {
+        "type": "message.reception",
+        "timestamp": "2026-08-13T17:01:22Z",
+        "webhook_id": "33d5637f-207e-4007-9a04-4a7ea971e96b",
+        "data": {
+            "account_id": "4cb423b9-7a62-4e23-bf3c-e22b2c20bce4",
+            "event": "on_reception",
+            "from": "support.graystack@tickets.graystack.one",
+            "recipient": "tester@example.com",
+            "subject": "Message-ID-Probe",
+            "message_id_header": "<019ffc12-419c-7249-bc06-fe87e4e7f448@tickets.graystack.one>",
+            "is_bot": false,
+            "id": "9ca5f071973811f1841f920006d48774"
+        }
+    }
+}

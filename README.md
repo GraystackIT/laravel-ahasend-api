@@ -591,6 +591,163 @@ try {
 
 ---
 
+## Domains
+
+Domain management is stateful: the package keeps an `ahasend_domains` row alongside the
+remote object so an application can show verification progress without polling the API on
+every page load. Run the migrations before using it.
+
+```php
+use GraystackIT\Ahasend\Services\DomainManager;
+
+$domains = app(DomainManager::class);
+
+// $owner is any Eloquent model — the package never interprets it.
+$domain = $domains->add('acme.at', $owner);
+
+foreach ($domain->outstandingRecords() as $record) {
+    echo "{$record->type->value}  {$record->host}  {$record->content}";
+}
+```
+
+### Verification is poll-driven, not webhook-driven
+
+AhaSend emits **no event when a domain becomes valid** — the only domain event is
+`domain.dns_error`. A domain therefore only ever moves forward through an explicit check:
+
+```php
+$domain = $domains->refresh($domain);   // "check DNS" button
+
+$domain->isVerified();                  // true once every required record propagated
+```
+
+Schedule the poll so pending domains progress without anyone pressing a button, and the
+expiry so an abandoned domain does not occupy its owner's slot forever:
+
+```php
+Schedule::command('ahasend:domains:poll')->hourly();
+Schedule::command('ahasend:domains:expire')->daily();
+```
+
+### One open domain per owner
+
+`DomainManager::add()` refuses a new domain while the owner still holds an unverified one,
+so an account cannot fill up with abandoned domains. On Postgres a partial unique index
+enforces the same rule at the database level, which is what settles two simultaneous adds.
+Owner-less domains — an application's own shared domains — are exempt.
+
+```php
+use GraystackIT\Ahasend\Exceptions\DomainLimitExceededException;
+
+try {
+    $domains->add('second.at', $owner);
+} catch (DomainLimitExceededException $e) {
+    $e->blockingDomains;   // ['first.at'] — offer "check DNS" or "delete" for these
+}
+```
+
+Raise the ceiling with `AHASEND_MAX_UNVERIFIED_DOMAINS`; going above 1 also means dropping
+the `ahasend_domains_owner_unverified_unique` index.
+
+---
+
+## Inbound mail
+
+A route's `recipient` pattern is domain-bound — `*` means every address on *that* domain —
+so each receiving domain needs its own route, and AhaSend generates a separate signing
+secret for each. There is no account-wide catch-all across domains, and the secret cannot be
+supplied when creating a route.
+
+That leaves two ways to hold those secrets, and the package serves both:
+
+| Endpoint | For | Secret |
+| --- | --- | --- |
+| `POST /ahasend/webhook` | delivery, bounces, suppressions, `domain.dns_error` | `AHASEND_WEBHOOK_SECRET` |
+| `POST /ahasend/inboundmail` | routes you create in the dashboard | `AHASEND_INBOUND_SECRET` |
+| `POST /ahasend/inbound/{route}` | routes the package provisions per customer domain | stored with the route |
+
+**Use the dashboard for your own domains.** They are few and known up front, so create the
+route by hand, point it at `/ahasend/inboundmail` and put its secret in the environment —
+one secret per domain:
+
+```dotenv
+AHASEND_INBOUND_SECRETS="postbox.example.com:whsec_postbox,tickets.example.com:whsec_tickets"
+```
+
+Publishing the config lets you write the same map as an array instead, which is the
+canonical form:
+
+```php
+'secrets' => [
+    'postbox.example.com' => env('AHASEND_INBOUND_SECRET_POSTBOX'),
+    'tickets.example.com' => env('AHASEND_INBOUND_SECRET_TICKETS'),
+],
+```
+
+**The secret that verifies a payload is what tells you which domain it was delivered to**,
+and `InboundMailReceived::$deliveredForDomain` carries it. Branch on that, never on the
+address list: a mail addressed to two of your domains matches two routes and is delivered
+**twice**, and both payloads carry the same addresses. Only the signature separates them —
+branch on addresses and both consumers process both deliveries.
+
+**The stored-secret path is for customer domains**, where `RouteManager` provisions a route
+the moment a domain verifies. There is no chance to put those secrets in a config file, so
+the route id in the URL is what the stored secret is looked up by. Nobody ever handles them.
+
+Two things this endpoint refuses rather than waving through: a payload when no secret is
+configured, and a provisioned route whose stored secret is empty — both answer `503`,
+because on a public endpoint "no secret" must never mean "no verification". Signed
+timestamps are checked against a tolerance window (`AHASEND_WEBHOOK_TOLERANCE_SECONDS`,
+default 300) so a captured request cannot be replayed forever, and all three endpoints carry
+a rate limit (`AHASEND_INBOUND_THROTTLE`, default `120,1`).
+
+```php
+use GraystackIT\Ahasend\Events\InboundMailReceived;
+
+class RouteInboundMail
+{
+    public function handle(InboundMailReceived $event): void
+    {
+        // Queue the real work: AhaSend retries on any non-2xx response, so slow
+        // synchronous handling produces duplicates. $deliveryId is stable across
+        // those retries — use it as the idempotency key.
+        ProcessInboundMail::dispatch($event->message, $event->deliveryId);
+    }
+}
+```
+
+`InboundMessage` normalises the payload:
+
+```php
+$message->text();               // reply-stripped body when the route produced one
+$message->parentMessageIds();   // In-Reply-To, then References newest-first
+$message->isAutomated();        // Auto-Submitted / Precedence / List-Id / X-Auto-Response-Suppress
+$message->inlineAttachments();  // parts referenced by cid: in the HTML body
+$message->attachments[0]->contents();   // decoded bytes
+$message->spamScore;
+$message->raw;                  // anything not modelled yet
+```
+
+Set `AHASEND_INBOUND_BASE_URL` to the publicly reachable URL of the application — AhaSend
+has to be able to POST to it, and route provisioning fails loudly if it is missing.
+
+### Routes created in the dashboard
+
+Prefer letting the package provision routes: it generates the URL, stores the secret and
+needs nothing pasted. For a route that already exists — created by hand, or whose local
+record was lost — adopt it once:
+
+```bash
+php artisan ahasend:routes:import rt_abc123 --secret=whsec_from_the_dashboard
+```
+
+The secret has to come from the dashboard because Ahasend returns it only at creation. The
+command stores it and repoints the route at this application's inbound endpoint, since that
+URL carries the id the secret is looked up by. `--keep-url` skips the repointing, in which
+case inbound mail keeps going wherever the route pointed before.
+
+---
+
 ## Testing
 
 ```bash
