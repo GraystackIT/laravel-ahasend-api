@@ -114,6 +114,28 @@ it('recognises an inline image by its disposition and links it to the body', fun
         ->and($message->htmlBody)->toContain('cid:' . $inline[0]->contentId);
 });
 
+it('recognises a real out-of-office reply as automated', function (): void {
+    $message = InboundMessage::fromArray(payloadFixture('inbound-auto-responder'));
+
+    // Ahasend fills the top-level `auto_submitted` (null on human mail) and
+    // passes the headers through. Both matter: an auto-reply that is not
+    // recognised gets answered by our auto-reply, and the two then bounce back
+    // and forth without end.
+    expect($message->isAutomated())->toBeTrue()
+        ->and($message->autoSubmitted)->toBe('auto-generated')
+        ->and($message->header('Auto-Submitted'))->toBe('auto-generated')
+        ->and($message->header('X-Auto-Response-Suppress'))->toBe('All');
+});
+
+it('threads an auto-reply like any other reply', function (): void {
+    $message = InboundMessage::fromArray(payloadFixture('inbound-auto-responder'));
+
+    // It still cites the message it answers, so it belongs to the ticket — it
+    // just must not trigger another automatic answer.
+    expect($message->parentMessageIds())->toHaveCount(1)
+        ->and($message->parentMessageIds()[0])->toContain('@tickets.graystack.one');
+});
+
 it('exposes the assigned message id on the outbound reception event', function (): void {
     $data = payloadFixture('outbound-reception-with-message-id');
 
