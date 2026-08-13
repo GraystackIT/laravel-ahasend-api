@@ -8,6 +8,7 @@ use GraystackIT\Ahasend\Data\InboundMessage;
 use GraystackIT\Ahasend\Events\InboundMailReceived;
 use GraystackIT\Ahasend\Models\AhasendRoute;
 use GraystackIT\Ahasend\Support\InboundSecrets;
+use GraystackIT\Ahasend\Support\PayloadCapture;
 use GraystackIT\Ahasend\Traits\VerifiesWebhookSignature;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -149,6 +150,8 @@ class InboundRouteController extends Controller
         ?InboundMessage $message = null,
     ): JsonResponse {
         $message ??= $this->message($request);
+
+        PayloadCapture::write($request, $domain, ['delivered_for_domain' => $domain]);
 
         Log::debug('Ahasend inbound: message received', [
             'domain'     => $domain,

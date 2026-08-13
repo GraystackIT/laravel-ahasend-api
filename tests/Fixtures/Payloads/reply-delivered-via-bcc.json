@@ -1,0 +1,53 @@
+{
+    "headers": {
+        "webhook-id": "019ffc10-0d87-7db7-8b3b-8a5ce9bb3d80",
+        "webhook-timestamp": "1786640338"
+    },
+    "delivered_for_domain": "postbox.graystack.one",
+    "payload": {
+        "type": "message.routing",
+        "timestamp": "2026-08-13T16:58:55Z",
+        "route_id": "a3d838a2-8315-4798-8358-9ae4950f8b5e",
+        "data": {
+            "id": "44c1a905973811f1b33d960004260a38",
+            "from": "tester@example.com",
+            "reply_to": "Test Person <tester@example.com>",
+            "to": "rechnungen.testunternehmen@postbox.graystack.one",
+            "subject": "Re: Testvorgang [#T-1042] — bitte antworten",
+            "message_id": "<71995040-b9a5-418b-8d9b-f24ccc746b40@mail.infomaniak.com>",
+            "size": 5549,
+            "spam_score": 0,
+            "bounce": false,
+            "cc": null,
+            "date": "Thu, 13 Aug 2026 18:58:54 +0200",
+            "in_reply_to": "<019ffc0c-1fda-748b-a26f-799f08e4d54b@tickets.graystack.one>",
+            "references": "<019ffc0c-1fda-748b-a26f-799f08e4d54b@tickets.graystack.one>",
+            "auto_submitted": null,
+            "html_body": "<html><head><style>.ws-ng-mail-style--4831eJzz9HPyjwAABGYBgQ{outline: none; box-sizing: content-box; line-height: initial;}</style></head><body><div style=\"font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; font-size: 14px;\">Noch ein testmail, diesmal mit bcc</div><div style=\"font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; font-size: 14px;\"><br></div><div data-ik-opengraph-ignore=\"\" class=\"ik_mail_quote answerContentMessage\"><div>Am 2026-08-13T18:54:43.000+02:00 hat Graystack Support (Test) &lt;support.graystack@tickets.graystack.one&gt; geschrieben:</div><blockquote class=\"ws-ng-quote\"><pre class=\"ws-ng-mail-style--4831eJzz9HPyjwAABGYBgQ\">Hallo Bernhard,\r\n\r\ndas ist eine Testnachricht fuer das Ticketsystem.\r\n\r\nBitte antworte darauf aus einem echten Mailclient und schreibe ein paar\r\nZeilen neuen Text ueber das Zitat. Damit pruefen wir zweierlei:\r\n\r\n1. ob In-Reply-To und References zurueckkommen\r\n2. ob reply_from_plain_body die neue Antwort enthaelt oder das Zitat\r\n\r\nDanke!</pre></blockquote></div><div style=\"font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; font-size: 14px;\"><br></div><div  data-ik-opengraph-ignore=\"\"><div><hr color=\"#50adaf\" align=\"left\" width=\"230\"><img src=\"https://workspace.storage.infomaniak.com/signature/346d939e662b91413c684ea879f5eb7791f9f3ff\" style=\"width: 126px; height: 25px;\"><br></div><div><span class=\"size\" style=\"font-size: 10px\"><b>Bernhard&nbsp;Harb<span style=\"color:#999999\" class=\"colour\"> | </span></b><span style=\"color:#999999\" class=\"colour\">CEO&nbsp;</span><b><span style=\"color:#999999\" class=\"colour\">|&nbsp;</span></b></span><span class=\"size\" style=\"font-size: 12px\"></span><b></b><span style=\"font-size: 10px\" class=\"size\"><span style=\"color:#999999\" class=\"colour\">tester@example.com</span></span><br></div></div></body></html>",
+            "plain_body": "Noch ein testmail, diesmal mit bcc\r\n\r\nAm 2026-08-13T18:54:43.000+02:00 hat Graystack Support (Test)\r\n<support.graystack@tickets.graystack.one> geschrieben:\r\n\r\n> Hallo Bernhard,\r\n> \r\n> das ist eine Testnachricht fuer das Ticketsystem.\r\n> \r\n> Bitte antworte darauf aus einem echten Mailclient und schreibe ein paar\r\n> Zeilen neuen Text ueber das Zitat. Damit pruefen wir zweierlei:\r\n> \r\n> 1. ob In-Reply-To und References zurueckkommen\r\n> 2. ob reply_from_plain_body die neue Antwort enthaelt oder das Zitat\r\n> \r\n> Danke!\r\n\r\n-------------------------\r\n\r\nBERNHARD HARB | CEO | tester@example.com",
+            "reply_from_plain_body": "Noch ein testmail, diesmal mit bcc",
+            "attachments": [],
+            "headers": {
+                "Content-Type": "multipart/alternative; boundary=Xkwi4S7B",
+                "Date": "Thu, 13 Aug 2026 18:58:54 +0200",
+                "Dkim-Signature": "<redacted>",
+                "From": "Test Person <tester@example.com>",
+                "In-Reply-To": "<019ffc0c-1fda-748b-a26f-799f08e4d54b@tickets.graystack.one>",
+                "Message-Id": "<71995040-b9a5-418b-8d9b-f24ccc746b40@mail.infomaniak.com>",
+                "Mime-Version": "1.0",
+                "Received": "from smtp-8fad.mail.infomaniak.ch (83.166.143.173) by send.ahasend.com (KumoMTA 138.199.133.242) with ESMTPS (TLSv1_3:TLS13_AES_256_GCM_SHA384)  id 44c1a905973811f1b33d960004260a38 for <rechnungen.testunternehmen@postbox.graystack.one>; Thu, 13 Aug 2026 16:58:55 +0000",
+                "References": "<019ffc0c-1fda-748b-a26f-799f08e4d54b@tickets.graystack.one>",
+                "Reply-To": "Test Person <tester@example.com>",
+                "Subject": "Re: Testvorgang [#T-1042] — bitte antworten",
+                "To": "\"Graystack Support (Test)\" <support.graystack@tickets.graystack.one>",
+                "X-Customer-Id": "4cb423b9-7a62-4e23-bf3c-e22b2c20bce4",
+                "X-Infomaniak-Routing": "alpha",
+                "X-Mailer": "Infomaniak Workspace (1.3.1331)",
+                "X-Ws-Locale": "de_DE",
+                "X-Ws-Location": "eJxzKUpMKykGAAfpAmU-",
+                "X-Ws-User-Mbox": "<redacted>",
+                "X-Ws-User-Origin": "<redacted>"
+            }
+        }
+    }
+}

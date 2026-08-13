@@ -26,10 +26,14 @@ final class InboundMessage
         public readonly string $from,
         public readonly array $to,
         /**
-         * The address the route actually delivered to.
+         * The address this delivery was routed to.
          *
-         * Not the same as `$to`: a BCC recipient never appears in that header,
-         * so anything keyed on `$to` alone would lose BCC'd mail entirely.
+         * Ahasend puts it in the payload's top-level `to`, which is **not** the
+         * `To:` header — that one lives in {@see $headers}. The difference is
+         * load-bearing: a BCC'd address appears here but in no header, and with
+         * one request per recipient each delivery names its own recipient, so
+         * the same mail sent to two of your domains arrives twice with a
+         * different value here each time.
          */
         public readonly ?string $recipient = null,
         public readonly string $subject = '',
@@ -61,7 +65,9 @@ final class InboundMessage
             messageId:      (string) ($data['message_id'] ?? $data['id'] ?? ''),
             from:           (string) ($data['from'] ?? ''),
             to:             self::addresses($data['to'] ?? null),
-            recipient:      self::singleAddress($data['recipient'] ?? $data['email'] ?? null),
+            // Verified against real payloads: the routed recipient arrives as
+            // the top-level `to`, and Ahasend sends no `recipient` key here.
+            recipient:      self::singleAddress($data['recipient'] ?? $data['to'] ?? null),
             subject:        (string) ($data['subject'] ?? ''),
             htmlBody:       isset($data['html_body']) ? (string) $data['html_body'] : null,
             plainBody:      isset($data['plain_body']) ? (string) $data['plain_body'] : null,

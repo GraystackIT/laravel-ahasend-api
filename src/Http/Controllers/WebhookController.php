@@ -16,6 +16,7 @@ use GraystackIT\Ahasend\Events\MailTransientError;
 use GraystackIT\Ahasend\Events\SuppressionCreated;
 use GraystackIT\Ahasend\Models\AhasendMessage;
 use GraystackIT\Ahasend\Services\DomainManager;
+use GraystackIT\Ahasend\Support\PayloadCapture;
 use GraystackIT\Ahasend\Traits\VerifiesWebhookSignature;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -57,6 +58,8 @@ class WebhookController extends Controller
             'message_id' => $messageId,
             'recipient'  => $recipient,
         ]);
+
+        PayloadCapture::write($request, $event !== '' ? $event : 'webhook');
 
         $this->persistStatusUpdate($messageId, $event, $data);
         $this->dispatchEvent($event, $messageId, $recipient, $data);
