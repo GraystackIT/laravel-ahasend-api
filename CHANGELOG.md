@@ -6,6 +6,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-08-13
+
 This release corrects the package against AhaSend's current v2 API (audited 2026-07-17 against the live OpenAPI spec and reference docs). Several endpoints — most critically authentication — were built against incorrect or outdated assumptions and would fail against a real account. All changes below are **breaking** unless noted otherwise; this package is pre-1.0, so no deprecation shims are provided.
 
 ### Fixed
