@@ -7,6 +7,7 @@ namespace GraystackIT\Ahasend\Http\Controllers;
 use GraystackIT\Ahasend\Data\InboundMessage;
 use GraystackIT\Ahasend\Events\InboundMailReceived;
 use GraystackIT\Ahasend\Models\AhasendRoute;
+use GraystackIT\Ahasend\Support\InboundSecrets;
 use GraystackIT\Ahasend\Traits\VerifiesWebhookSignature;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -22,13 +23,17 @@ use Illuminate\Support\Facades\Log;
  * Two ways in, because there are two ways a route comes into existence:
  *
  * - `/{static_path}` for routes managed in the dashboard. Their secrets are
- *   configured, which is the simple case for an application's own few domains.
+ *   configured per domain, which is the simple case for an application's own
+ *   few domains.
  * - `/{path}/{route}` for routes this package provisions per customer domain.
  *   There is no chance to put those secrets in a config file, so the route id
  *   in the URL is what the stored secret is looked up by.
  *
- * Deliberately minimal either way: verify, normalise, fire an event, return 200.
- * Anything slower risks an Ahasend retry and therefore a duplicate.
+ * Either way the secret that verifies the payload is what authenticates the
+ * delivery domain — see {@see InboundMailReceived::$deliveredForDomain}.
+ *
+ * Deliberately minimal: verify, normalise, fire an event, return 200. Anything
+ * slower risks an Ahasend retry and therefore a duplicate.
  */
 class InboundRouteController extends Controller
 {
@@ -41,45 +46,57 @@ class InboundRouteController extends Controller
     {
         $inboundRoute = AhasendRoute::query()->where('public_id', $route)->first();
 
+        // Unknown and unverified answer alike, so the ids in our route URLs
+        // cannot be enumerated by telling the two responses apart.
         if (! $inboundRoute instanceof AhasendRoute) {
-            Log::warning('Ahasend inbound: unknown route', [
+            return $this->rejectSignature($request, ['route' => $route, 'reason' => 'unknown route']);
+        }
+
+        // An empty stored secret would make signatureIsValid() accept anything,
+        // and this endpoint is public. Refuse instead of waving it through.
+        if ((string) $inboundRoute->secret === '') {
+            Log::error('Ahasend inbound: route has no signing secret, refusing delivery', [
                 'route' => $route,
-                'ip'    => $request->ip(),
             ]);
 
-            return response()->json(['error' => 'Unknown route'], 404);
+            return response()->json(['error' => 'Route not configured'], 503);
         }
 
         if (! $this->signatureIsValid($request, $inboundRoute->secret)) {
             return $this->rejectSignature($request, ['route' => $route]);
         }
 
-        return $this->accept($request, $inboundRoute);
+        $domain = $inboundRoute->domain?->domain
+            ?? InboundSecrets::domainOf($inboundRoute->recipient)
+            ?? '';
+
+        return $this->accept($request, $domain, $inboundRoute);
     }
 
     /**
      * Handle inbound mail arriving on a route managed in the dashboard.
      *
-     * Verified against the configured secrets: an application's own domains are
-     * few and known up front, so their secrets belong in the environment rather
-     * than in a table.
+     * The configured secret of the delivery domain verifies the payload, and
+     * passing that check is what proves which domain the mail was routed for.
      */
     public function handleStatic(Request $request): JsonResponse
     {
-        /** @var list<string> $secrets */
+        /** @var array<string, string> $secrets */
         $secrets = (array) config('ahasend.inbound.secrets', []);
 
         if ($secrets === []) {
-            Log::warning('Ahasend inbound: no route secret configured, payload rejected', [
+            Log::error('Ahasend inbound: no route secret configured, refusing delivery', [
                 'ip' => $request->ip(),
             ]);
 
             return response()->json(['error' => 'Inbound not configured'], 503);
         }
 
-        foreach ($secrets as $secret) {
+        $message = $this->message($request);
+
+        foreach ($this->candidateSecrets($message, $secrets) as [$domain, $secret]) {
             if ($this->signatureIsValid($request, $secret)) {
-                return $this->accept($request);
+                return $this->accept($request, $domain, null, $message);
             }
         }
 
@@ -87,28 +104,64 @@ class InboundRouteController extends Controller
     }
 
     /**
+     * Secrets worth trying for this payload, most likely first.
+     *
+     * Reading the domain from an unverified payload is safe — it only picks the
+     * key, the HMAC remains the gate. When no delivery address matches a
+     * configured domain (a payload shape we have not seen), every configured
+     * secret is tried rather than dropping mail that may well be genuine.
+     *
+     * @param  array<string, string>  $secrets
+     * @return list<array{0: string, 1: string}>  [domain, secret] pairs.
+     */
+    private function candidateSecrets(InboundMessage $message, array $secrets): array
+    {
+        $domains = [];
+
+        foreach ($message->deliveryAddresses() as $address) {
+            $domain = InboundSecrets::domainOf($address);
+
+            if ($domain !== null) {
+                $domains[] = $domain;
+            }
+        }
+
+        $matched = InboundSecrets::match($domains, $secrets);
+
+        if ($matched !== null) {
+            return [$matched];
+        }
+
+        return array_map(
+            static fn (string $domain, string $secret): array => [$domain, $secret],
+            array_keys($secrets),
+            array_values($secrets),
+        );
+    }
+
+    /**
      * Normalise a verified payload and announce it.
      */
-    private function accept(Request $request, ?AhasendRoute $route = null): JsonResponse
-    {
-        /** @var array<string, mixed> $payload */
-        $payload = $request->json()->all();
+    private function accept(
+        Request $request,
+        string $domain,
+        ?AhasendRoute $route = null,
+        ?InboundMessage $message = null,
+    ): JsonResponse {
+        $message ??= $this->message($request);
 
-        // Standard Webhooks format: { type, timestamp, data: { ... } }
-        /** @var array<string, mixed> $data */
-        $data    = (array) ($payload['data'] ?? $payload);
-        $message = InboundMessage::fromArray($data);
-
-        Log::info('Ahasend inbound: message received', [
+        Log::debug('Ahasend inbound: message received', [
+            'domain'     => $domain,
             'route'      => $route?->public_id,
             'message_id' => $message->messageId,
             'from'       => $message->from,
-            'to'         => $message->to,
+            'recipient'  => $message->recipient,
         ]);
 
         InboundMailReceived::dispatch(
             $message,
             $this->webhookDeliveryId($request) ?: $message->messageId,
+            $domain,
             $route,
         );
 
@@ -116,11 +169,26 @@ class InboundRouteController extends Controller
     }
 
     /**
+     * The payload as a normalised message.
+     */
+    private function message(Request $request): InboundMessage
+    {
+        /** @var array<string, mixed> $payload */
+        $payload = $request->json()->all();
+
+        // Standard Webhooks format: { type, timestamp, data: { ... } }
+        /** @var array<string, mixed> $data */
+        $data = (array) ($payload['data'] ?? $payload);
+
+        return InboundMessage::fromArray($data);
+    }
+
+    /**
      * @param  array<string, mixed>  $context
      */
     private function rejectSignature(Request $request, array $context): JsonResponse
     {
-        Log::warning('Ahasend inbound: invalid signature', [
+        Log::warning('Ahasend inbound: rejected', [
             ...$context,
             'ip' => $request->ip(),
         ]);

@@ -25,6 +25,13 @@ final class InboundMessage
         public readonly string $messageId,
         public readonly string $from,
         public readonly array $to,
+        /**
+         * The address the route actually delivered to.
+         *
+         * Not the same as `$to`: a BCC recipient never appears in that header,
+         * so anything keyed on `$to` alone would lose BCC'd mail entirely.
+         */
+        public readonly ?string $recipient = null,
         public readonly string $subject = '',
         public readonly ?string $htmlBody = null,
         public readonly ?string $plainBody = null,
@@ -54,6 +61,7 @@ final class InboundMessage
             messageId:      (string) ($data['message_id'] ?? $data['id'] ?? ''),
             from:           (string) ($data['from'] ?? ''),
             to:             self::addresses($data['to'] ?? null),
+            recipient:      self::singleAddress($data['recipient'] ?? $data['email'] ?? null),
             subject:        (string) ($data['subject'] ?? ''),
             htmlBody:       isset($data['html_body']) ? (string) $data['html_body'] : null,
             plainBody:      isset($data['plain_body']) ? (string) $data['plain_body'] : null,
@@ -154,6 +162,31 @@ final class InboundMessage
     }
 
     /**
+     * Every address this mail was delivered to, most authoritative first.
+     *
+     * The routed recipient leads, because it is the only one guaranteed to be
+     * the address the route matched — `to`/`cc` are headers and omit BCC.
+     *
+     * @return list<string>
+     */
+    public function deliveryAddresses(): array
+    {
+        $addresses = $this->recipient !== null ? [$this->recipient] : [];
+
+        return array_values(array_unique([...$addresses, ...$this->to, ...$this->cc]));
+    }
+
+    /**
+     * Normalise a single address that may arrive bare or RFC 5322 formatted.
+     */
+    private static function singleAddress(mixed $value): ?string
+    {
+        $addresses = self::addresses($value);
+
+        return $addresses[0] ?? null;
+    }
+
+    /**
      * Normalise an address list that may arrive as a string or an array.
      *
      * @return list<string>
@@ -173,7 +206,7 @@ final class InboundMessage
         foreach ($value as $entry) {
             $address = is_array($entry)
                 ? (string) ($entry['email'] ?? $entry['address'] ?? '')
-                : trim((string) $entry);
+                : self::bareAddress((string) $entry);
 
             if ($address !== '') {
                 $addresses[] = $address;
@@ -181,6 +214,23 @@ final class InboundMessage
         }
 
         return array_values(array_unique($addresses));
+    }
+
+    /**
+     * Strip an RFC 5322 display name, leaving just the address.
+     *
+     * `"Acme Support" <support@acme.at>` becomes `support@acme.at`, so callers
+     * can read the domain without parsing the header form themselves.
+     */
+    private static function bareAddress(string $entry): string
+    {
+        $entry = trim($entry);
+
+        if (preg_match('/<([^<>]+)>\s*$/', $entry, $matches) === 1) {
+            return trim($matches[1]);
+        }
+
+        return $entry;
     }
 
     /**

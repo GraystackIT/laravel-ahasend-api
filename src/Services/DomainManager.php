@@ -17,6 +17,7 @@ use GraystackIT\Ahasend\Models\AhasendDomain;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\QueryException;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
 
@@ -104,41 +105,48 @@ class DomainManager
      */
     public function refresh(AhasendDomain $domain): AhasendDomain
     {
-        $wasVerified = $domain->isVerified();
+        // The scheduled poll and a "check DNS" click can land at the same moment.
+        // Without the lock both would see an unverified domain, both would
+        // provision a route, and every mail would arrive twice.
+        return DB::transaction(function () use ($domain): AhasendDomain {
+            /** @var AhasendDomain $domain */
+            $domain = AhasendDomain::query()
+                ->whereKey($domain->getKey())
+                ->lockForUpdate()
+                ->firstOrFail();
 
-        $domain->forceFill(['verify_state' => DomainVerifyState::Checking])->save();
+            $wasVerified = $domain->isVerified();
 
-        try {
+            // A failing API call throws out of the transaction, so nothing is
+            // written at all and the domain keeps the state it had. Marking it
+            // "failed" would claim a DNS check happened that never did.
             $data = $this->domains->checkDns($domain->domain);
-        } catch (AhasendException $e) {
-            // Leaving the record stuck in "checking" would hide it from the poll.
-            $domain->forceFill([
-                'verify_state' => $wasVerified ? DomainVerifyState::Verified : DomainVerifyState::Failed,
-            ])->save();
 
-            throw $e;
-        }
+            $domain->fillFromApi($data)->fill([
+                'verify_state'      => $data->dnsValid ? DomainVerifyState::Verified : DomainVerifyState::Failed,
+                'last_dns_check_at' => $data->lastDnsCheckAt ?? Carbon::now(),
+            ]);
 
-        $domain->fillFromApi($data)->fill([
-            'verify_state'      => $data->dnsValid ? DomainVerifyState::Verified : DomainVerifyState::Failed,
-            'last_dns_check_at' => $data->lastDnsCheckAt ?? Carbon::now(),
-        ]);
+            $domain->save();
 
-        $domain->save();
+            if (! $domain->isVerified()) {
+                DomainVerificationFailed::dispatch($domain, $domain->outstandingRecords());
 
-        if ($domain->isVerified()) {
-            $this->routes->provisionFor($domain);
+                return $domain;
+            }
+
+            // Shared domains keep their dashboard-managed route; provisioning
+            // one here would give them a second.
+            if ($domain->owner_type !== null) {
+                $this->routes->provisionFor($domain);
+            }
 
             if (! $wasVerified) {
                 DomainVerified::dispatch($domain);
             }
 
             return $domain;
-        }
-
-        DomainVerificationFailed::dispatch($domain, $domain->outstandingRecords());
-
-        return $domain;
+        });
     }
 
     /**
@@ -218,6 +226,10 @@ class DomainManager
 
         return AhasendDomain::query()
             ->unverified()
+            // Owner-less domains are the application's own: their routes live in
+            // the dashboard. Polling one would verify it and provision a second
+            // route beside the dashboard one, doubling every delivery.
+            ->whereNotNull('owner_type')
             ->where('created_at', '>=', Carbon::now()->subDays($maxAge))
             ->orderBy('last_dns_check_at')
             ->get();

@@ -139,10 +139,12 @@ it('dispatches MailReceived event on reception webhook', function (): void {
     });
 });
 
-it('dispatches MailReceived event on inbound message routing with recipient from the to field', function (): void {
+it('ignores inbound message routing on the event webhook', function (): void {
     Event::fake([MailReceived::class]);
 
-    // Real AhaSend message-routing payload: recipient lives in data.to (no data.recipient key).
+    // Routed mail is signed with the route's own secret and belongs on the
+    // inbound endpoints. Accepting it here too would mean two verification
+    // rules for one delivery, and processing it twice.
     postWebhook([
         'type'      => 'message.routing',
         'timestamp' => date('c'),
@@ -152,18 +154,10 @@ it('dispatches MailReceived event on inbound message routing with recipient from
             'to'         => 'support@yourdomain.com',
             'subject'    => 'Help',
             'plain_body' => 'Body',
-            'html_body'  => '<p>Body</p>',
-            'attachments' => [
-                ['filename' => 'a.pdf', 'content_type' => 'application/pdf', 'data' => base64_encode('%PDF')],
-            ],
         ],
     ]);
 
-    Event::assertDispatched(MailReceived::class, function (MailReceived $event): bool {
-        return $event->messageId === 'msg-routed'
-            && $event->recipient === 'support@yourdomain.com'
-            && ($event->payload['from'] ?? null) === 'customer@gmail.com';
-    });
+    Event::assertNotDispatched(MailReceived::class);
 });
 
 it('dispatches DomainDnsError event on domain dns_error webhook', function (): void {

@@ -27,6 +27,8 @@ it('verifies a pending domain through the poll command', function (): void {
         'ahasend_domain_id' => 'dom_1',
         'domain'            => 'acme.at',
         'verify_state'      => DomainVerifyState::Pending,
+        'owner_type'        => 'App\\Models\\Organization',
+        'owner_id'          => '1',
     ]);
 
     mockConnector([
@@ -54,6 +56,8 @@ it('leaves a domain pending when DNS is still incomplete', function (): void {
         'ahasend_domain_id' => 'dom_1',
         'domain'            => 'acme.at',
         'verify_state'      => DomainVerifyState::Pending,
+        'owner_type'        => 'App\\Models\\Organization',
+        'owner_id'          => '1',
     ]);
 
     mockConnector([
@@ -69,11 +73,13 @@ it('leaves a domain pending when DNS is still incomplete', function (): void {
     expect(AhasendDomain::query()->firstOrFail()->verify_state)->toBe(DomainVerifyState::Failed);
 });
 
-it('does not leave a domain stuck in checking when the API fails', function (): void {
+it('leaves the domain untouched when the DNS check itself fails', function (): void {
     AhasendDomain::create([
         'ahasend_domain_id' => 'dom_1',
         'domain'            => 'acme.at',
         'verify_state'      => DomainVerifyState::Pending,
+        'owner_type'        => 'App\\Models\\Organization',
+        'owner_id'          => '1',
     ]);
 
     mockConnector([
@@ -82,7 +88,8 @@ it('does not leave a domain stuck in checking when the API fails', function (): 
 
     $this->artisan('ahasend:domains:poll')->assertSuccessful();
 
-    expect(AhasendDomain::query()->firstOrFail()->verify_state)->toBe(DomainVerifyState::Failed);
+    // "Failed" would claim a check ran and found bad records; it never ran.
+    expect(AhasendDomain::query()->firstOrFail()->verify_state)->toBe(DomainVerifyState::Pending);
 });
 
 it('skips verified domains when polling', function (): void {
@@ -91,6 +98,8 @@ it('skips verified domains when polling', function (): void {
         'domain'            => 'acme.at',
         'verify_state'      => DomainVerifyState::Verified,
         'dns_valid'         => true,
+        'owner_type'        => 'App\\Models\\Organization',
+        'owner_id'          => '1',
     ]);
 
     // No mock is registered: any HTTP call would fail the test.

@@ -667,20 +667,39 @@ That leaves two ways to hold those secrets, and the package serves both:
 | `POST /ahasend/inbound/{route}` | routes the package provisions per customer domain | stored with the route |
 
 **Use the dashboard for your own domains.** They are few and known up front, so create the
-route by hand, point it at `/ahasend/inboundmail` and put its secret in the environment.
-Several routes are fine — `AHASEND_INBOUND_SECRET` takes a comma-separated list, and a
-payload is accepted when it matches any of them:
+route by hand, point it at `/ahasend/inboundmail` and put its secret in the environment —
+one secret per domain:
 
 ```dotenv
-AHASEND_INBOUND_SECRET=whsec_postboxes,whsec_tickets
+AHASEND_INBOUND_SECRETS="postbox.example.com:whsec_postbox,tickets.example.com:whsec_tickets"
 ```
+
+Publishing the config lets you write the same map as an array instead, which is the
+canonical form:
+
+```php
+'secrets' => [
+    'postbox.example.com' => env('AHASEND_INBOUND_SECRET_POSTBOX'),
+    'tickets.example.com' => env('AHASEND_INBOUND_SECRET_TICKETS'),
+],
+```
+
+**The secret that verifies a payload is what tells you which domain it was delivered to**,
+and `InboundMailReceived::$deliveredForDomain` carries it. Branch on that, never on the
+address list: a mail addressed to two of your domains matches two routes and is delivered
+**twice**, and both payloads carry the same addresses. Only the signature separates them —
+branch on addresses and both consumers process both deliveries.
 
 **The stored-secret path is for customer domains**, where `RouteManager` provisions a route
 the moment a domain verifies. There is no chance to put those secrets in a config file, so
 the route id in the URL is what the stored secret is looked up by. Nobody ever handles them.
 
-With no secret configured, `/ahasend/inboundmail` answers `503` rather than accepting
-unverified mail on a public endpoint.
+Two things this endpoint refuses rather than waving through: a payload when no secret is
+configured, and a provisioned route whose stored secret is empty — both answer `503`,
+because on a public endpoint "no secret" must never mean "no verification". Signed
+timestamps are checked against a tolerance window (`AHASEND_WEBHOOK_TOLERANCE_SECONDS`,
+default 300) so a captured request cannot be replayed forever, and all three endpoints carry
+a rate limit (`AHASEND_INBOUND_THROTTLE`, default `120,1`).
 
 ```php
 use GraystackIT\Ahasend\Events\InboundMailReceived;

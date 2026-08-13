@@ -20,6 +20,14 @@ class InboundMailReceived
     use Dispatchable;
 
     /**
+     * @param  string  $deliveredForDomain  The domain whose secret verified this payload,
+     *                                      and therefore the only trustworthy answer to
+     *                                      "which of our domains was this delivered to".
+     *                                      Consumers must branch on this, never on the
+     *                                      address list: a mail addressed to two of our
+     *                                      domains matches two routes and arrives twice
+     *                                      with identical addresses in both payloads —
+     *                                      only the signature tells them apart.
      * @param  AhasendRoute|null  $route  The provisioned route this arrived on, if any.
      *                                    Null for a route managed in the dashboard and
      *                                    verified against a configured secret.
@@ -27,6 +35,7 @@ class InboundMailReceived
     public function __construct(
         public readonly InboundMessage $message,
         public readonly string $deliveryId,
+        public readonly string $deliveredForDomain,
         public readonly ?AhasendRoute $route = null,
     ) {}
 }

@@ -39,6 +39,10 @@ trait VerifiesWebhookSignature
             return false;
         }
 
+        if (! $this->timestampIsFresh($timestamp)) {
+            return false;
+        }
+
         $signed   = "{$messageId}.{$timestamp}.{$request->getContent()}";
         $expected = base64_encode(hash_hmac('sha256', $signed, $secret, true));
 
@@ -51,6 +55,28 @@ trait VerifiesWebhookSignature
         }
 
         return false;
+    }
+
+    /**
+     * Whether the signed timestamp is close enough to now.
+     *
+     * The timestamp is part of the signed content, so without this check a
+     * captured request stays replayable forever — the signature never expires
+     * on its own. A tolerance of `0` disables the check.
+     */
+    protected function timestampIsFresh(string $timestamp): bool
+    {
+        $tolerance = (int) config('ahasend.inbound.tolerance', 300);
+
+        if ($tolerance <= 0) {
+            return true;
+        }
+
+        if (! is_numeric($timestamp)) {
+            return false;
+        }
+
+        return abs(time() - (int) $timestamp) <= $tolerance;
     }
 
     /**

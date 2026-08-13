@@ -394,14 +394,42 @@ it('ignores a DNS error for a domain it does not track', function (): void {
 
 // ─── pollable() ───────────────────────────────────────────────────────────
 
-it('offers only unverified domains inside the poll horizon', function (): void {
+it('offers only unverified owned domains inside the poll horizon', function (): void {
     config()->set('ahasend.domains.poll_max_age_days', 14);
 
-    AhasendDomain::create(['ahasend_domain_id' => 'a', 'domain' => 'young.at', 'verify_state' => DomainVerifyState::Pending]);
-    AhasendDomain::create(['ahasend_domain_id' => 'b', 'domain' => 'done.at', 'verify_state' => DomainVerifyState::Verified]);
+    $owned = [
+        'owner_type' => $this->owner->getMorphClass(),
+        'owner_id'   => (string) $this->owner->getKey(),
+    ];
 
-    $old = AhasendDomain::create(['ahasend_domain_id' => 'c', 'domain' => 'old.at', 'verify_state' => DomainVerifyState::Failed]);
+    AhasendDomain::create(['ahasend_domain_id' => 'a', 'domain' => 'young.at', 'verify_state' => DomainVerifyState::Pending, ...$owned]);
+    AhasendDomain::create(['ahasend_domain_id' => 'b', 'domain' => 'done.at', 'verify_state' => DomainVerifyState::Verified, ...$owned]);
+
+    // Shared domains keep a dashboard-managed route; polling one would verify
+    // it and provision a second route beside it.
+    AhasendDomain::create(['ahasend_domain_id' => 'd', 'domain' => 'shared.at', 'verify_state' => DomainVerifyState::Pending]);
+
+    $old = AhasendDomain::create(['ahasend_domain_id' => 'c', 'domain' => 'old.at', 'verify_state' => DomainVerifyState::Failed, ...$owned]);
     $old->forceFill(['created_at' => Carbon::now()->subDays(30)])->save();
 
     expect(manager([])->pollable()->pluck('domain')->all())->toBe(['young.at']);
+});
+
+it('refuses to provision a route for a shared domain', function (): void {
+    $manager = manager([
+        CheckDomainDnsRequest::class => MockResponse::make(apiDomain(['dns_valid' => true])),
+    ]);
+
+    $shared = AhasendDomain::create([
+        'ahasend_domain_id' => 'dom_shared',
+        'domain'            => 'acme.at',
+        'verify_state'      => DomainVerifyState::Pending,
+    ]);
+
+    // Verifies fine, but no route is created: no CreateRouteRequest is mocked,
+    // so an attempt would fail the test outright.
+    $refreshed = $manager->refresh($shared);
+
+    expect($refreshed->verify_state)->toBe(DomainVerifyState::Verified)
+        ->and(AhasendRoute::query()->count())->toBe(0);
 });

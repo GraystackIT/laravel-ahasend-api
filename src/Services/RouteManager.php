@@ -31,6 +31,17 @@ class RouteManager
      */
     public function provisionFor(AhasendDomain $domain): AhasendRoute
     {
+        // Domains without an owner are the application's own: their routes are
+        // managed in the dashboard and verified against a configured secret.
+        // Provisioning one here would give the domain a second route, and every
+        // mail would arrive twice.
+        if ($domain->owner_type === null) {
+            throw AhasendException::make(
+                "Refusing to provision a route for the shared domain {$domain->domain}. "
+                . 'Domains without an owner are managed in the Ahasend dashboard.'
+            );
+        }
+
         $existing = $domain->routes()->first();
 
         if ($existing instanceof AhasendRoute) {
@@ -46,17 +57,24 @@ class RouteManager
             recipient:          "*@{$domain->domain}",
             includeAttachments: (bool) ($defaults['attachments'] ?? true),
             includeHeaders:     (bool) ($defaults['headers'] ?? true),
-            groupByMessageId:   (bool) ($defaults['group_by_message_id'] ?? true),
+            groupByMessageId:   (bool) ($defaults['group_by_message_id'] ?? false),
             stripReplies:       (bool) ($defaults['strip_replies'] ?? true),
             enabled:            true,
-            idempotencyKey:     $publicId,
+            // Keyed on the domain, not on this call: a retry or a concurrent
+            // "check DNS" must collapse into the same remote route instead of
+            // creating a second one.
+            idempotencyKey:     "route:{$domain->getKey()}",
         );
 
-        if ($data->secret === null) {
-            Log::warning('Ahasend: route created without a secret — inbound payloads cannot be verified', [
-                'route_id' => $data->id,
-                'domain'   => $domain->domain,
-            ]);
+        if ($data->secret === null || $data->secret === '') {
+            // Without a secret the endpoint could not verify anything, and an
+            // unverifying public endpoint is worse than no route at all.
+            $this->deleteRemote($data->id);
+
+            throw AhasendException::make(
+                "Ahasend returned no signing secret for the route on {$domain->domain}. "
+                . 'The route was removed again; retry the DNS check to provision it.'
+            );
         }
 
         $route = (new AhasendRoute)
@@ -96,16 +114,27 @@ class RouteManager
      */
     public function retire(AhasendRoute $route): void
     {
+        $this->deleteRemote($route->ahasend_route_id);
+
+        $route->delete();
+    }
+
+    /**
+     * Delete a route in Ahasend, tolerating failure.
+     *
+     * A remote failure is logged but never stops local cleanup: an orphaned
+     * remote route is recoverable, a stale local row is not.
+     */
+    private function deleteRemote(string $routeId): void
+    {
         try {
-            $this->routes->delete($route->ahasend_route_id);
+            $this->routes->delete($routeId);
         } catch (AhasendException $e) {
-            Log::warning('Ahasend: failed to delete inbound route remotely, removing locally anyway', [
-                'route_id' => $route->ahasend_route_id,
+            Log::warning('Ahasend: failed to delete inbound route remotely', [
+                'route_id' => $routeId,
                 'error'    => $e->getMessage(),
             ]);
         }
-
-        $route->delete();
     }
 
     /**

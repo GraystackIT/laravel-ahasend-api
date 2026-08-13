@@ -9,11 +9,8 @@ namespace GraystackIT\Ahasend\Enums;
  */
 enum DomainVerifyState: string
 {
-    /** Created remotely, DNS records handed out, nothing verified yet. */
+    /** Created remotely, DNS records handed out, no check has run yet. */
     case Pending = 'pending';
-
-    /** A DNS check is currently in flight. */
-    case Checking = 'checking';
 
     /** Ahasend reports every required record as valid. */
     case Verified = 'verified';
@@ -28,7 +25,7 @@ enum DomainVerifyState: string
      */
     public static function unverified(): array
     {
-        return [self::Pending, self::Checking, self::Failed];
+        return [self::Pending, self::Failed];
     }
 
     /**

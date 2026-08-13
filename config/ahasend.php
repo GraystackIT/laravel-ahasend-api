@@ -109,32 +109,46 @@ return [
     | those secrets, and both endpoints are always available:
     |
     | 1. Routes you manage in the dashboard (the application's own domains) point
-    |    at `static_path` and are verified against `secrets` below. Nothing else
-    |    to configure.
+    |    at `static_path` and are verified against `secrets` below — a map of
+    |    domain to signing secret. The secret that verifies a payload is what
+    |    authenticates the delivery domain, and consumers branch on that: a mail
+    |    addressed to two of your domains matches two routes and is delivered
+    |    twice, with the same address list in both payloads. Only the signature
+    |    tells the two deliveries apart.
     | 2. Routes the application provisions per customer domain point at
     |    `path/{route}` — their secrets are generated at creation and stored with
     |    the route, since there is no chance to put them in a config file.
     |
-    | - secrets:     one or more route signing secrets, comma-separated.
+    | - secrets:     domain => signing secret. Publishing this config lets you
+    |                write the array directly; otherwise it is parsed from
+    |                AHASEND_INBOUND_SECRETS as "domain:secret,domain:secret".
     | - static_path: endpoint for dashboard-managed routes.
     | - path:        endpoint prefix for provisioned routes; the id is appended.
     | - base_url:    public base URL registered with Ahasend. Defaults to APP_URL.
-    | - defaults:    options every provisioned route is created with.
+    | - tolerance:   how many seconds a signed timestamp may deviate from now,
+    |                so a captured request cannot be replayed indefinitely.
+    | - throttle:    rate limit for the public inbound and webhook endpoints,
+    |                as "attempts,minutes". Empty disables it.
+    | - defaults:    options every provisioned route is created with. Grouping by
+    |                message id must stay off: one request per recipient is what
+    |                makes Ahasend fan a multi-recipient mail out for us, each
+    |                event carrying a single unambiguous `recipient`.
     |
     */
     'inbound' => [
-        'secrets'     => array_values(array_filter(array_map(
-            'trim',
-            explode(',', (string) env('AHASEND_INBOUND_SECRET', '')),
-        ))),
+        'secrets'     => GraystackIT\Ahasend\Support\InboundSecrets::parse(
+            env('AHASEND_INBOUND_SECRETS'),
+        ),
         'static_path' => env('AHASEND_INBOUND_STATIC_PATH', 'ahasend/inboundmail'),
         'path'        => env('AHASEND_INBOUND_PATH', 'ahasend/inbound'),
         'base_url'    => env('AHASEND_INBOUND_BASE_URL', env('APP_URL')),
+        'tolerance'   => (int) env('AHASEND_WEBHOOK_TOLERANCE_SECONDS', 300),
+        'throttle'    => env('AHASEND_INBOUND_THROTTLE', '120,1'),
         'defaults' => [
             'attachments'         => (bool) env('AHASEND_INBOUND_ATTACHMENTS', true),
             'headers'             => (bool) env('AHASEND_INBOUND_HEADERS', true),
             'strip_replies'       => (bool) env('AHASEND_INBOUND_STRIP_REPLIES', true),
-            'group_by_message_id' => (bool) env('AHASEND_INBOUND_GROUP_BY_MESSAGE_ID', true),
+            'group_by_message_id' => (bool) env('AHASEND_INBOUND_GROUP_BY_MESSAGE_ID', false),
         ],
     ],
 

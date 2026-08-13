@@ -50,8 +50,7 @@ class WebhookController extends Controller
         /** @var array<string, mixed> $data */
         $data      = (array) ($payload['data'] ?? $payload);
         $messageId = (string) ($data['id'] ?? $data['message_id'] ?? '');
-        // Inbound message routing carries the recipient under `to`; status events use `recipient`/`email`.
-        $recipient = (string) ($data['recipient'] ?? $data['email'] ?? $data['to'] ?? '');
+        $recipient = (string) ($data['recipient'] ?? $data['email'] ?? '');
 
         Log::info('Ahasend webhook received', [
             'event'      => $event,
@@ -99,7 +98,6 @@ class WebhookController extends Controller
             'message.suppressed'     => 'suppressed',
             'message.transient_error' => 'transient_error',
             'message.reception'      => 'received',
-            'message.routing'        => 'received',
             default                  => $event,
         };
 
@@ -147,8 +145,11 @@ class WebhookController extends Controller
                 $payload['reason'] ?? null,
                 $payload,
             ),
-            'message.reception',
-            'message.routing'         => MailReceived::dispatch($messageId, $recipient, $payload),
+            // `message.routing` deliberately not handled here: routed inbound
+            // mail is signed with the route's own secret and belongs on the
+            // inbound endpoints. Two paths for one thing would mean two
+            // verification rules and duplicate processing.
+            'message.reception'       => MailReceived::dispatch($messageId, $recipient, $payload),
             'domain.dns_error'        => $this->handleDomainDnsError($payload),
             'suppression.created'     => SuppressionCreated::dispatch(
                 $payload['email'] ?? $recipient,
