@@ -6,6 +6,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+## [0.2.1] - 2026-08-15
+
 ### Fixed
 - `AhasendDomain::expiresAt()` returned `?Illuminate\Support\Carbon`, which threw a `TypeError` in any application that calls `Date::use(CarbonImmutable::class)` — the model's `created_at` is then a `Carbon\CarbonImmutable`, and that is not a subtype of the declared return type. The method now returns `?Carbon\CarbonInterface`, so it works under either date factory.
 - The `@property` annotations on `AhasendDomain`, `AhasendRoute` and `AhasendMessage` claimed `Carbon` for the timestamp columns for the same reason; they now say `CarbonInterface`.
