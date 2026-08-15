@@ -4,10 +4,10 @@ declare(strict_types=1);
 
 namespace GraystackIT\Ahasend\Models;
 
+use Carbon\CarbonInterface;
 use GraystackIT\Ahasend\Data\Route as RouteData;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
-use Illuminate\Support\Carbon;
 
 /**
  * An inbound message route provisioned on the Ahasend account.
@@ -17,21 +17,21 @@ use Illuminate\Support\Carbon;
  * incoming payloads against, which is why the endpoint takes the route id in
  * its path rather than sharing one account-wide secret.
  *
- * @property int         $id
- * @property string      $public_id
- * @property string      $ahasend_route_id
- * @property int|null    $ahasend_domain_id
- * @property string      $name
- * @property string      $recipient
- * @property string      $url
- * @property string|null $secret
- * @property bool        $attachments
- * @property bool        $headers
- * @property bool        $strip_replies
- * @property bool        $group_by_message_id
- * @property bool        $enabled
- * @property Carbon      $created_at
- * @property Carbon      $updated_at
+ * @property int             $id
+ * @property string          $public_id
+ * @property string          $ahasend_route_id
+ * @property int|null        $ahasend_domain_id
+ * @property string          $name
+ * @property string          $recipient
+ * @property string          $url
+ * @property string|null     $secret
+ * @property bool            $attachments
+ * @property bool            $headers
+ * @property bool            $strip_replies
+ * @property bool            $group_by_message_id
+ * @property bool            $enabled
+ * @property CarbonInterface $created_at
+ * @property CarbonInterface $updated_at
  */
 class AhasendRoute extends Model
 {

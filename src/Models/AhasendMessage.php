@@ -4,19 +4,20 @@ declare(strict_types=1);
 
 namespace GraystackIT\Ahasend\Models;
 
+use Carbon\CarbonInterface;
 use Illuminate\Database\Eloquent\Model;
 
 /**
  * Persists outgoing email details and inbound webhook status updates.
  *
- * @property int         $id
- * @property string      $message_id
- * @property string      $recipient
- * @property string      $subject
- * @property string      $status
- * @property array       $payload
- * @property \Carbon\Carbon $created_at
- * @property \Carbon\Carbon $updated_at
+ * @property int             $id
+ * @property string          $message_id
+ * @property string          $recipient
+ * @property string          $subject
+ * @property string          $status
+ * @property array           $payload
+ * @property CarbonInterface $created_at
+ * @property CarbonInterface $updated_at
  */
 class AhasendMessage extends Model
 {

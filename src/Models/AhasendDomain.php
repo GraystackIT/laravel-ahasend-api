@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace GraystackIT\Ahasend\Models;
 
+use Carbon\CarbonInterface;
 use GraystackIT\Ahasend\Data\DnsRecord;
 use GraystackIT\Ahasend\Data\Domain as DomainData;
 use GraystackIT\Ahasend\Enums\DomainVerifyState;
@@ -11,7 +12,6 @@ use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\MorphTo;
-use Illuminate\Support\Carbon;
 
 /**
  * A domain registered on the Ahasend account and tracked locally.
@@ -26,7 +26,7 @@ use Illuminate\Support\Carbon;
  * @property array<int, array<string, mixed>>|null $dns_records
  * @property bool                   $dns_valid
  * @property DomainVerifyState      $verify_state
- * @property Carbon|null            $last_dns_check_at
+ * @property CarbonInterface|null   $last_dns_check_at
  * @property string|null            $tracking_subdomain
  * @property string|null            $return_path_subdomain
  * @property string|null            $subscription_subdomain
@@ -37,8 +37,8 @@ use Illuminate\Support\Carbon;
  * @property string|null            $dsn_recipient
  * @property string|null            $owner_type
  * @property string|null            $owner_id
- * @property Carbon                 $created_at
- * @property Carbon                 $updated_at
+ * @property CarbonInterface        $created_at
+ * @property CarbonInterface        $updated_at
  */
 class AhasendDomain extends Model
 {
@@ -157,7 +157,7 @@ class AhasendDomain extends Model
     /**
      * When an unverified domain will be removed automatically.
      */
-    public function expiresAt(): ?Carbon
+    public function expiresAt(): ?CarbonInterface
     {
         if ($this->isVerified()) {
             return null;
