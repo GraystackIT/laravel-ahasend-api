@@ -87,6 +87,10 @@ class SendEmailRequest extends Request implements HasBody
             $payload['sandbox'] = $this->message->sandbox;
         }
 
+        if ($this->message->templateId !== null) {
+            $payload['template_id'] = $this->message->templateId;
+        }
+
         return $payload;
     }
 }

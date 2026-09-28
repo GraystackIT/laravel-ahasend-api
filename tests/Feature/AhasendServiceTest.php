@@ -160,6 +160,118 @@ it('routes to SendConversationalEmailRequest when BCC is present', function (): 
     expect($ahasendId)->toBe('conv-msg-005');
 });
 
+// ─── Templates ────────────────────────────────────────────────────────────
+
+it('sends a templated email via sendTemplate()', function (): void {
+    Event::fake([MailSent::class]);
+
+    $mockClient = new MockClient([
+        SendEmailRequest::class => MockResponse::make(['message_id' => 'tmpl-msg-001'], 200),
+    ]);
+
+    $connector = app(AhasendConnector::class);
+    $connector->withMockClient($mockClient);
+
+    $service = new AhasendService($connector);
+
+    $ahasendId = $service->sendTemplate(
+        to:            [['email' => 'to@example.com']],
+        templateId:    'tmpl-uuid-1',
+        substitutions: ['name' => 'Alice'],
+    );
+
+    expect($ahasendId)->toBe('tmpl-msg-001');
+
+    $lastRequest = $mockClient->getLastRequest();
+    expect($lastRequest)->toBeInstanceOf(SendEmailRequest::class);
+
+    $reflection = new ReflectionMethod($lastRequest, 'defaultBody');
+    $body       = $reflection->invoke($lastRequest);
+
+    expect($body['template_id'])->toBe('tmpl-uuid-1')
+        ->and($body['substitutions'])->toBe(['name' => 'Alice']);
+});
+
+it('throws AhasendException when templateId is combined with htmlContent', function (): void {
+    $service = new AhasendService(app(AhasendConnector::class));
+
+    $service->send(new EmailMessage(
+        fromEmail:   'a@example.com',
+        fromName:    'A',
+        to:          [['email' => 'b@example.com']],
+        subject:     'Subject',
+        htmlContent: '<p>Hi</p>',
+        templateId:  'tmpl-uuid-1',
+    ));
+})->throws(AhasendException::class);
+
+it('throws AhasendException when templateId is combined with cc/bcc', function (): void {
+    $service = new AhasendService(app(AhasendConnector::class));
+
+    $service->send(new EmailMessage(
+        fromEmail:  'a@example.com',
+        fromName:   'A',
+        to:         [['email' => 'b@example.com']],
+        subject:    'Subject',
+        cc:         [['email' => 'cc@example.com']],
+        templateId: 'tmpl-uuid-1',
+    ));
+})->throws(AhasendException::class);
+
+// ─── Attachment payload fixes ─────────────────────────────────────────────
+
+it('never sends cc/bcc on the plain messages endpoint, since Ahasend does not support them there', function (): void {
+    Event::fake([MailSent::class]);
+
+    $mockClient = new MockClient([
+        SendEmailWithAttachmentsRequest::class => MockResponse::make(['message_id' => 'attach-msg-004'], 200),
+    ]);
+
+    $connector = app(AhasendConnector::class);
+    $connector->withMockClient($mockClient);
+
+    $service = new AhasendService($connector);
+
+    // Constructing the request directly (bypassing AhasendService::resolveRequest's cc/bcc
+    // routing) to prove the class itself no longer builds cc/bcc into the body at all.
+    $request = new SendEmailWithAttachmentsRequest(new EmailMessage(
+        fromEmail:   'a@example.com',
+        fromName:    'A',
+        to:          [['email' => 'b@example.com']],
+        subject:     'Subject',
+        cc:          [['email' => 'cc@example.com']],
+        attachments: [['name' => 'a.txt', 'content' => base64_encode('hi'), 'mime_type' => 'text/plain']],
+    ));
+
+    $reflection = new ReflectionMethod($request, 'defaultBody');
+    $body       = $reflection->invoke($request);
+
+    expect($body)->not->toHaveKey('cc')
+        ->and($body)->not->toHaveKey('bcc');
+});
+
+it('passes content_id and content_disposition through on attachments', function (): void {
+    $request = new SendEmailWithAttachmentsRequest(new EmailMessage(
+        fromEmail: 'a@example.com',
+        fromName:  'A',
+        to:        [['email' => 'b@example.com']],
+        subject:   'Subject',
+        attachments: [[
+            'name'                => 'inline.png',
+            'content'             => base64_encode('binary'),
+            'mime_type'           => 'image/png',
+            'content_id'          => '<image1@example.com>',
+            'content_disposition' => 'inline',
+        ]],
+    ));
+
+    $reflection = new ReflectionMethod($request, 'defaultBody');
+    $body       = $reflection->invoke($request);
+
+    expect($body['attachments'][0]['content_id'])->toBe('<image1@example.com>')
+        ->and($body['attachments'][0]['content_disposition'])->toBe('inline');
+});
+
 // ─── Auto-generated message_id ────────────────────────────────────────────
 
 it('generates a message_id when none is provided', function (): void {

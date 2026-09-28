@@ -54,6 +54,18 @@ it('dispatches MailDelivered event on delivered webhook', function (): void {
     });
 });
 
+it('dispatches MailDelivered event with the delivery_attempt object when present', function (): void {
+    Event::fake([MailDelivered::class]);
+
+    postWebhook(webhookPayload('message.delivered', 'msg-delivered-2', 'user@example.com', [
+        'delivery_attempt' => ['smtp_code' => 250, 'response' => '250 2.0.0 OK'],
+    ]));
+
+    Event::assertDispatched(MailDelivered::class, function (MailDelivered $event): bool {
+        return $event->deliveryAttempt === ['smtp_code' => 250, 'response' => '250 2.0.0 OK'];
+    });
+});
+
 it('dispatches MailOpened event on opened webhook', function (): void {
     Event::fake([MailOpened::class]);
 
@@ -64,13 +76,15 @@ it('dispatches MailOpened event on opened webhook', function (): void {
     });
 });
 
-it('dispatches MailFailed event with reason on failed webhook', function (): void {
+it('dispatches MailFailed event with a null reason, since Ahasend never includes one for retry exhaustion', function (): void {
     Event::fake([MailFailed::class]);
 
+    // A stray top-level `reason` key must NOT leak into the event — message.failed carries no
+    // delivery_attempt and therefore no reason text in the real payload.
     postWebhook(webhookPayload('message.failed', 'msg-failed', 'user@example.com', ['reason' => 'mailbox full']));
 
     Event::assertDispatched(MailFailed::class, function (MailFailed $event): bool {
-        return $event->messageId === 'msg-failed' && $event->reason === 'mailbox full';
+        return $event->messageId === 'msg-failed' && $event->reason === null;
     });
 });
 
@@ -109,23 +123,40 @@ it('dispatches MailClicked event with url on clicked webhook', function (): void
     });
 });
 
-it('dispatches MailSuppressed event with suppression_type on suppressed webhook', function (): void {
+it('dispatches MailSuppressed event with a null suppressionType, since Ahasend includes no suppression-reason field on this event', function (): void {
     Event::fake([MailSuppressed::class]);
 
+    // A stray top-level `suppression_type` key must NOT leak into the event.
     postWebhook(webhookPayload('message.suppressed', 'msg-suppressed', 'user@example.com', ['suppression_type' => 'unsubscribe']));
 
     Event::assertDispatched(MailSuppressed::class, function (MailSuppressed $event): bool {
-        return $event->messageId === 'msg-suppressed' && $event->suppressionType === 'unsubscribe';
+        return $event->messageId === 'msg-suppressed' && $event->suppressionType === null;
     });
 });
 
-it('dispatches MailTransientError event with reason on transient_error webhook', function (): void {
+it('dispatches MailTransientError event with a description read from delivery_attempt on transient_error webhook', function (): void {
     Event::fake([MailTransientError::class]);
 
-    postWebhook(webhookPayload('message.transient_error', 'msg-transient', 'user@example.com', ['reason' => 'connection timeout']));
+    postWebhook(webhookPayload('message.transient_error', 'msg-transient', 'user@example.com', [
+        'delivery_attempt' => ['description' => 'connection timeout', 'smtp_code' => 421],
+    ]));
 
     Event::assertDispatched(MailTransientError::class, function (MailTransientError $event): bool {
-        return $event->messageId === 'msg-transient' && $event->reason === 'connection timeout';
+        return $event->messageId === 'msg-transient'
+            && $event->reason === 'connection timeout'
+            && $event->deliveryAttempt === ['description' => 'connection timeout', 'smtp_code' => 421];
+    });
+});
+
+it('falls back to delivery_attempt.response when description is absent for transient_error', function (): void {
+    Event::fake([MailTransientError::class]);
+
+    postWebhook(webhookPayload('message.transient_error', 'msg-transient-2', 'user@example.com', [
+        'delivery_attempt' => ['response' => '421 4.7.0 try again later'],
+    ]));
+
+    Event::assertDispatched(MailTransientError::class, function (MailTransientError $event): bool {
+        return $event->reason === '421 4.7.0 try again later';
     });
 });
 
@@ -174,17 +205,18 @@ it('dispatches DomainDnsError event on domain dns_error webhook', function (): v
     });
 });
 
-it('dispatches SuppressionCreated event on suppression created webhook', function (): void {
+it('dispatches SuppressionCreated event with type read from the reason field, since Ahasend has no separate type field', function (): void {
     Event::fake([SuppressionCreated::class]);
 
+    // A stray top-level `type` key must NOT leak into the event — the real field is `reason`.
     postWebhook([
         'type'      => 'suppression.created',
         'timestamp' => date('c'),
-        'data'      => ['email' => 'bounced@example.com', 'type' => 'hard_bounce'],
+        'data'      => ['email' => 'bounced@example.com', 'reason' => 'FBL Complaint Report', 'type' => 'wrong'],
     ]);
 
     Event::assertDispatched(SuppressionCreated::class, function (SuppressionCreated $event): bool {
-        return $event->email === 'bounced@example.com' && $event->type === 'hard_bounce';
+        return $event->email === 'bounced@example.com' && $event->type === 'FBL Complaint Report';
     });
 });
 

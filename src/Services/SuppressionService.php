@@ -56,7 +56,7 @@ class SuppressionService
     /**
      * List suppressions with optional cursor-based pagination and filters.
      *
-     * @return array{data: Suppression[], meta: array<string, mixed>}
+     * @return array{data: Suppression[], pagination: array<string, mixed>}
      * @throws AhasendException
      */
     public function list(
@@ -82,7 +82,7 @@ class SuppressionService
                     static fn (array $item): Suppression => Suppression::fromArray($item),
                     $body['data'] ?? [],
                 ),
-                'meta' => $body['meta'] ?? [],
+                'pagination' => $body['pagination'] ?? [],
             ];
         } catch (RequestException $e) {
             Log::error('Ahasend: failed to list suppressions', [

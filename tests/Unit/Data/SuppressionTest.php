@@ -12,6 +12,7 @@ it('constructs a Suppression from an API response array', function (): void {
         'reason'     => 'User unknown',
         'expires_at' => '2026-12-31T00:00:00Z',
         'created_at' => '2024-06-01T00:00:00Z',
+        'protected'  => true,
     ]);
 
     expect($suppression->id)->toBe('sup-abc123')
@@ -19,14 +20,16 @@ it('constructs a Suppression from an API response array', function (): void {
         ->and($suppression->domain)->toBe('example.com')
         ->and($suppression->reason)->toBe('User unknown')
         ->and($suppression->expiresAt)->toBe('2026-12-31T00:00:00Z')
-        ->and($suppression->createdAt)->toBe('2024-06-01T00:00:00Z');
+        ->and($suppression->createdAt)->toBe('2024-06-01T00:00:00Z')
+        ->and($suppression->protected)->toBeTrue();
 });
 
-it('defaults domain and reason to null when absent', function (): void {
+it('defaults domain, reason and protected when absent', function (): void {
     $suppression = Suppression::fromArray(['email' => 'user@example.com']);
 
     expect($suppression->domain)->toBeNull()
-        ->and($suppression->reason)->toBeNull();
+        ->and($suppression->reason)->toBeNull()
+        ->and($suppression->protected)->toBeFalse();
 });
 
 it('serializes a Suppression to array', function (): void {

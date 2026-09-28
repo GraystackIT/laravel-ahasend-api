@@ -13,7 +13,7 @@ final class EmailMessage
      * @param  array<int, array{email: string, name?: string}>  $to
      * @param  array<int, array{email: string, name?: string}>  $cc
      * @param  array<int, array{email: string, name?: string}>  $bcc
-     * @param  array<int, array{name: string, content: string, mime_type: string}>  $attachments
+     * @param  array<int, array{name: string, content: string, mime_type: string, content_id?: string, content_disposition?: string}>  $attachments
      * @param  string[]|null  $tags
      * @param  array<string, mixed>|null  $tracking
      * @param  array<string, mixed>|null  $schedule
@@ -33,6 +33,12 @@ final class EmailMessage
         public readonly array $bcc = [],
         public readonly array $attachments = [],
         public readonly ?string $messageId = null,
+        /**
+         * ID of a saved Ahasend transactional template to send. Supplies the subject, preview
+         * text and both bodies, and cannot be combined with $htmlContent, $textContent,
+         * $ampContent, or with $cc/$bcc (only the plain send endpoint supports templates).
+         */
+        public readonly ?string $templateId = null,
         public readonly ?array $tags = null,
         public readonly ?array $tracking = null,
         public readonly ?array $schedule = null,
@@ -74,6 +80,7 @@ final class EmailMessage
             bcc:           $data['bcc'] ?? [],
             attachments:   $data['attachments'] ?? [],
             messageId:     $data['message_id'] ?? null,
+            templateId:    $data['template_id'] ?? null,
             tags:          $data['tags'] ?? null,
             tracking:      $data['tracking'] ?? null,
             schedule:      $data['schedule'] ?? null,
@@ -105,6 +112,7 @@ final class EmailMessage
             'bcc'           => $this->bcc,
             'attachments'   => $this->attachments,
             'message_id'    => $this->messageId,
+            'template_id'   => $this->templateId,
             'tags'          => $this->tags,
             'tracking'      => $this->tracking,
             'schedule'      => $this->schedule,

@@ -14,6 +14,10 @@ class SuppressionCreated
     use Dispatchable;
 
     /**
+     * @param  string|null  $type  Suppression reason as reported by Ahasend (e.g.
+     *                             "FBL Complaint Report"), read from the payload's `reason`
+     *                             field — Ahasend's suppression.created event has no separate
+     *                             `type` field.
      * @param  array<string, mixed>  $payload  Raw webhook payload from Ahasend.
      */
     public function __construct(

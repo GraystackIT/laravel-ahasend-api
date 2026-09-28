@@ -35,6 +35,20 @@ class AhasendService
      */
     public function send(EmailMessage $message): string
     {
+        if ($message->templateId !== null) {
+            if ($message->htmlContent !== null || $message->textContent !== null || $message->ampContent !== null) {
+                throw AhasendException::make(
+                    'A templateId cannot be combined with htmlContent, textContent, or ampContent — the template supplies the body.'
+                );
+            }
+
+            if (! empty($message->cc) || ! empty($message->bcc)) {
+                throw AhasendException::make(
+                    'A templateId cannot be combined with cc/bcc — only the plain send endpoint supports templates.'
+                );
+            }
+        }
+
         // Ensure a message_id exists so webhook events can be correlated.
         if ($message->messageId === null) {
             $message = $message->withMessageId((string) Str::uuid());
@@ -168,6 +182,31 @@ class AhasendService
             cc:          $cc,
             bcc:         $bcc,
             attachments: $attachments,
+        ));
+    }
+
+    /**
+     * Convenience method: send an email built from a saved Ahasend transactional template.
+     *
+     * @param  array<int, array{email: string, name?: string}>  $to
+     * @param  array<string, mixed>|null  $substitutions  Template variables
+     * @throws AhasendException
+     */
+    public function sendTemplate(
+        array $to,
+        string $templateId,
+        ?array $substitutions = null,
+        string $subject = '',
+        string $fromEmail = '',
+        string $fromName = '',
+    ): string {
+        return $this->send(new EmailMessage(
+            fromEmail:     $fromEmail ?: (string) config('ahasend.from.address'),
+            fromName:      $fromName ?: (string) config('ahasend.from.name'),
+            to:            $to,
+            subject:       $subject,
+            templateId:    $templateId,
+            substitutions: $substitutions,
         ));
     }
 

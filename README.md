@@ -109,6 +109,37 @@ $mailer->sendWithAttachments(
 );
 ```
 
+Each attachment also accepts an optional `content_id` and `content_disposition`. Set `content_id` to reference the attachment inline from `htmlContent` (e.g. `<img src="cid:image1@example.com">`):
+
+```php
+$mailer->sendWithAttachments(
+    to:          [['email' => 'user@example.com']],
+    subject:     'Inline image',
+    attachments: [
+        [
+            'name' => 'logo.png',
+            'content' => $pngBase64,
+            'mime_type' => 'image/png',
+            'content_id' => '<image1@example.com>',
+            'content_disposition' => 'inline',
+        ],
+    ],
+    htmlContent: '<p><img src="cid:image1@example.com"></p>',
+);
+```
+
+### Templated email
+
+Send using a saved Ahasend transactional template, which supplies the subject, preview text and both bodies. A `templateId` cannot be combined with `htmlContent`/`textContent`/`ampContent` (the template supplies them) or with `cc`/`bcc` (only the plain send endpoint supports templates) — `AhasendService` throws `AhasendException` client-side if you try:
+
+```php
+$mailer->sendTemplate(
+    to:            [['email' => 'user@example.com']],
+    templateId:    'tmpl-uuid-1',
+    substitutions: ['name' => 'Alice', 'order_id' => '1234'],
+);
+```
+
 ### CC / BCC
 
 Pass `cc` and `bcc` arrays to any convenience method. When CC or BCC recipients are present the package automatically routes the request to the Ahasend conversational endpoint (`POST /messages/conversation`), which is the only endpoint that supports those fields:
@@ -139,7 +170,7 @@ $message = new EmailMessage(
 $ahasendMessageId = $mailer->send($message);
 ```
 
-`EmailMessage` also accepts these optional fields, all passed straight through to the Ahasend API: `tags` (string[]), `tracking` (`['open' => bool, 'click' => bool]`), `schedule` (`['first_attempt' => ..., 'expires' => ...]`, RFC3339), `retention` (`['metadata' => int, 'data' => int]`, days), `substitutions` (template variables — not supported on the conversational/CC-BCC endpoint), `sandboxResult` (`deliver`/`bounce`/`defer`/`fail`/`suppress`), `sandbox` (bool — route through AhaSend's sandbox without sending real mail), `replyTo` (`['email' => ..., 'name' => ...]`), `headers` (custom header map), and `ampContent` (AMP4EMAIL body).
+`EmailMessage` also accepts these optional fields, all passed straight through to the Ahasend API: `tags` (string[]), `tracking` (`['open' => bool, 'click' => bool]`), `schedule` (`['first_attempt' => ..., 'expires' => ...]`, RFC3339), `retention` (`['metadata' => int, 'data' => int]`, days), `substitutions` (template variables — not supported on the conversational/CC-BCC endpoint), `sandboxResult` (`deliver`/`bounce`/`defer`/`fail`/`suppress`), `sandbox` (bool — route through AhaSend's sandbox without sending real mail), `replyTo` (`['email' => ..., 'name' => ...]`), `headers` (custom header map), `ampContent` (AMP4EMAIL body), and `templateId` (see [Templated email](#templated-email) — cannot combine with body content or cc/bcc).
 
 ## Webhook handling
 
@@ -151,19 +182,27 @@ https://yourdomain.com/ahasend/webhook
 
 The path is configurable via `AHASEND_WEBHOOK_PATH`. Incoming events fire Laravel events you can listen to:
 
-| Ahasend event | Laravel event |
-|---|---|
-| `message.delivered` | `MailDelivered` |
-| `message.opened` | `MailOpened` |
-| `message.failed` | `MailFailed` |
-| `message.bounced` | `MailBounced` |
+| Ahasend event | Laravel event | Extra constructor argument(s) |
+|---|---|---|
+| `message.reception` | `MailReceived` | — (`message.routing` is handled separately — see [Inbound mail](#inbound-mail)) |
+| `message.delivered` | `MailDelivered` | `$deliveryAttempt` (nullable array — smtp_code, response, etc., when Ahasend recorded one) |
+| `message.opened` | `MailOpened` | — |
+| `message.clicked` | `MailClicked` | `$url` |
+| `message.failed` | `MailFailed` | `$reason` — **always null**: this event reports retry exhaustion, and Ahasend's payload carries no per-attempt diagnostic for it |
+| `message.bounced` | `MailBounced` | `$bounceType` — absent from every payload observed so far; see `MailBounced::outboundMessageId()` and listen for `SuppressionCreated` to learn why a message bounced |
+| `message.suppressed` | `MailSuppressed` | `$suppressionType` — **always null**: Ahasend's payload carries no suppression-reason field on this event; see the matching `SuppressionCreated` event or the Suppressions API's `reason` instead |
+| `message.transient_error` | `MailTransientError` | `$reason` (from `delivery_attempt.description`/`.response`, when present), `$deliveryAttempt` |
+| `domain.dns_error` | `DomainDnsError` | — |
+| `suppression.created` | `SuppressionCreated` | `$type` (from the payload's `reason` field) |
+
+Every event also carries the raw `$payload` (the webhook's `data` object) so you can read any field Ahasend adds that isn't yet a first-class constructor argument.
 
 ### Listening to events
 
 ```php
 // In EventServiceProvider or a listener class:
 Event::listen(MailDelivered::class, function (MailDelivered $event): void {
-    // $event->messageId, $event->recipient, $event->payload
+    // $event->messageId, $event->recipient, $event->deliveryAttempt, $event->payload
 });
 ```
 
@@ -328,7 +367,14 @@ echo $message->sender;        // 'sender@example.com'
 echo $message->recipient;     // 'recipient@example.com'
 echo $message->status->value; // 'delivered'
 echo $message->status->isTerminal(); // true
+echo $message->direction;             // 'outbound'
+echo $message->numAttempts;           // 1
+echo $message->clickCount;            // 0
+echo $message->openCount;             // 1
+echo $message->bounceClassification;  // null unless is_bounce_notification
 ```
+
+Ahasend documents `status` as an open set of values — new statuses (e.g. sandbox-prefixed ones) can appear without notice. Parsing never throws: an unrecognized value maps to `MessageStatus::Unknown`, and `$message->rawStatus` always holds the exact string Ahasend returned so you don't lose information when that happens.
 
 ### List messages
 
@@ -395,9 +441,12 @@ $credential = $smtp->create('Test App', sandbox: true);
 echo $credential->id;       // 'cred-xyz'
 echo $credential->username; // 'smtp_my_application'
 echo $credential->password; // 'generated-secret' (only available on create)
-echo $credential->host;     // 'send.ahasend.com' (EU) or 'send-us.ahasend.com' (US)
-echo $credential->port;     // 587 — also available: 25, 2525 (STARTTLS required; port 465 is not supported)
+echo $credential->sandbox;  // bool
+echo $credential->scope;    // 'global' or 'scoped'
+echo $credential->domains;  // string[] — the domains it's scoped to; empty when scope is 'global'
 ```
+
+The SMTP host/port to connect to (`send.ahasend.com` / `send-us.ahasend.com`, ports 25/587/2525) are fixed values, not returned per credential, so they aren't modeled here.
 
 ### List all SMTP credentials
 
@@ -456,6 +505,8 @@ echo $suppression->id;     // 'sup-xyz'
 echo $suppression->email;  // 'user@example.com'
 ```
 
+`$suppression->protected` is `true` when the recipient made the suppression decision themselves (unsubscribed or reported spam) — `deleteAll()` keeps protected suppressions even though it removes everything else.
+
 ### List suppressions
 
 Uses cursor-based pagination, plus optional filters:
@@ -475,7 +526,7 @@ foreach ($result['data'] as $suppression) {
     echo $suppression->email;
 }
 
-// $result['meta'] contains cursor pagination info
+// $result['pagination'] contains has_more / next_cursor / previous_cursor
 ```
 
 ### Delete a specific suppression

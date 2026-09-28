@@ -6,6 +6,53 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+Follow-up drift pass (2026-09-28), scoped to what the 0.2.0/0.2.1 audit above didn't already
+cover. `message.bounced`/`MailBounced` deliberately untouched — 0.2.0 already verified that
+event against a real captured payload and reached the same "no reason data on this event"
+conclusion this pass would have, so its fix stands as-is.
+
+### Fixed
+- `WebhookController::dispatchEvent()` read `reason` (message.failed/transient_error),
+  `suppression_type` (message.suppressed), and `type` (suppression.created) — none of these
+  keys exist in Ahasend's real payloads for those events (confirmed against the Go SDK's
+  `MessageEventData`/`SuppressionEventData` structs). `message.transient_error` now reads the
+  real `delivery_attempt.description`/`.response`; `suppression.created` now reads the real
+  `reason` field; `message.failed`/`message.suppressed` now pass `null` explicitly and are
+  documented as always null, since AhaSend's payload carries no such data for either.
+- `SuppressionService::list()` read a nonexistent `meta` key, always losing pagination info —
+  now reads `pagination`, the same generic paginated-list envelope `MessageService::list()`
+  already read correctly.
+- `MessageStatus::from()` threw an uncaught `ValueError` for any status string outside its
+  seven known cases. AhaSend documents `status` as an open set of values, so `Message::fromArray()`
+  now falls back to a new `MessageStatus::Unknown` case via `tryFrom()` instead of crashing; the
+  original string is always preserved on the new `Message::$rawStatus` property. Added the
+  confirmed `MessageStatus::Received` case.
+- `SmtpCredential::fromArray()` read `host`/`port` fields that do not exist in AhaSend's SMTP
+  credential response (defaulting to invented values) while silently dropping the real
+  `sandbox`, `scope`, and `domains` fields — meaning there was no way to tell which domains a
+  scoped credential applied to. `SmtpCredential` now exposes `sandbox`, `scope`, and `domains`
+  instead; `host`/`port` removed.
+- `SendEmailWithAttachmentsRequest` built `cc`/`bcc` fields for the plain `/messages` endpoint,
+  which does not support them at all. `AhasendService::resolveRequest()` already always routes
+  cc/bcc through the conversation endpoint first, so this was unreachable dead code; removed.
+
+### Added
+- `EmailMessage::$templateId` and `AhasendService::sendTemplate()`: send using a saved AhaSend
+  transactional template. Guarded client-side against the two combinations AhaSend's schema
+  doesn't support: a template with body content (`htmlContent`/`textContent`/`ampContent`), and
+  a template with `cc`/`bcc`.
+- `content_id` and `content_disposition` on attachment arrays (`SendEmailWithAttachmentsRequest`
+  and `SendConversationalEmailRequest`), enabling inline images referenced via `cid:` in
+  `htmlContent`.
+- `Message` DTO: new fields `direction`, `numAttempts`, `deliveryAttempts` (raw),
+  `isBounceNotification`, `bounceClassification`, `referenceMessageId`, `clickCount`,
+  `openCount`, `content`, `retainUntil`.
+- `Suppression::$protected` — set by AhaSend when the recipient made the suppression decision
+  themselves (unsubscribed or reported spam); `deleteAll()` keeps protected suppressions.
+- `MailDelivered` and `MailTransientError` events now carry the raw `delivery_attempt` object
+  (`smtp_code`, `enhanced_status_code`, `response`, `description`, `classification`, `command`)
+  as `$deliveryAttempt`, when AhaSend recorded one — previously only reachable via `$payload`.
+
 ## [0.2.1] - 2026-08-15
 
 ### Fixed

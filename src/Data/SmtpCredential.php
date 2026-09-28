@@ -9,17 +9,26 @@ namespace GraystackIT\Ahasend\Data;
  */
 final class SmtpCredential
 {
+    /**
+     * @param  string[]  $domains  Domains this credential is scoped to; empty when $scope is "global"
+     */
     public function __construct(
         public readonly string  $id,
         public readonly string  $name,
         public readonly string  $username,
-        public readonly string  $host,
-        public readonly int     $port,
+        public readonly bool    $sandbox,
+        public readonly string  $scope,
+        public readonly array   $domains = [],
         public readonly ?string $password = null,
         public readonly ?string $createdAt = null,
     ) {}
 
     /**
+     * Build from a raw Ahasend API SMTP credential item.
+     *
+     * Ahasend's response does not include the SMTP host/port to connect to — those are fixed
+     * per the SMTP relay docs, not per credential — so they are not modeled here.
+     *
      * @param  array<string, mixed>  $data
      */
     public static function fromArray(array $data): self
@@ -28,8 +37,9 @@ final class SmtpCredential
             id:        (string) ($data['id'] ?? ''),
             name:      (string) ($data['name'] ?? ''),
             username:  (string) ($data['username'] ?? ''),
-            host:      (string) ($data['host'] ?? 'send.ahasend.com'),
-            port:      (int) ($data['port'] ?? 587),
+            sandbox:   (bool) ($data['sandbox'] ?? false),
+            scope:     (string) ($data['scope'] ?? 'global'),
+            domains:   $data['domains'] ?? [],
             password:  isset($data['password']) ? (string) $data['password'] : null,
             createdAt: isset($data['created_at']) ? (string) $data['created_at'] : null,
         );
@@ -44,8 +54,9 @@ final class SmtpCredential
             'id'         => $this->id,
             'name'       => $this->name,
             'username'   => $this->username,
-            'host'       => $this->host,
-            'port'       => $this->port,
+            'sandbox'    => $this->sandbox,
+            'scope'      => $this->scope,
+            'domains'    => $this->domains,
             'password'   => $this->password,
             'created_at' => $this->createdAt,
         ];

@@ -162,3 +162,34 @@ it('round-trips optional send fields through fromArray and toArray', function ()
         ->and($array['substitutions'])->toBe(['key' => 'value'])
         ->and($array['sandbox_result'])->toBe('bounce');
 });
+
+it('defaults templateId to null and stores it when provided', function (): void {
+    $withoutTemplate = new EmailMessage(
+        fromEmail: 'a@example.com',
+        fromName:  'A',
+        to:        [['email' => 'b@example.com']],
+        subject:   'Subject',
+    );
+
+    $withTemplate = new EmailMessage(
+        fromEmail:  'a@example.com',
+        fromName:   'A',
+        to:         [['email' => 'b@example.com']],
+        subject:    'Subject',
+        templateId: 'tmpl-uuid-1',
+    );
+
+    expect($withoutTemplate->templateId)->toBeNull()
+        ->and($withTemplate->templateId)->toBe('tmpl-uuid-1')
+        ->and($withTemplate->toArray()['template_id'])->toBe('tmpl-uuid-1');
+});
+
+it('round-trips templateId through fromArray', function (): void {
+    $message = EmailMessage::fromArray([
+        'to'          => [['email' => 'b@example.com']],
+        'subject'     => 'Test',
+        'template_id' => 'tmpl-uuid-2',
+    ]);
+
+    expect($message->templateId)->toBe('tmpl-uuid-2');
+});

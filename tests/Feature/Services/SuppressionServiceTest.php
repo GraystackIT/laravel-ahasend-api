@@ -67,7 +67,7 @@ it('lists suppressions and returns Suppression DTOs', function (): void {
                 ['email' => 'a@example.com'],
                 ['email' => 'b@example.com'],
             ],
-            'meta' => ['total' => 2],
+            'pagination' => ['has_more' => false, 'next_cursor' => null, 'previous_cursor' => null],
         ], 200),
     ]);
 
@@ -80,14 +80,14 @@ it('lists suppressions and returns Suppression DTOs', function (): void {
     expect($result['data'])->toHaveCount(2)
         ->and($result['data'][0])->toBeInstanceOf(Suppression::class)
         ->and($result['data'][0]->email)->toBe('a@example.com')
-        ->and($result['meta']['total'])->toBe(2);
+        ->and($result['pagination']['has_more'])->toBeFalse();
 });
 
 it('filters suppressions by domain', function (): void {
     $mockClient = new MockClient([
         ListSuppressionsRequest::class => MockResponse::make([
             'data' => [],
-            'meta' => [],
+            'pagination' => [],
         ], 200),
     ]);
 

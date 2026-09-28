@@ -16,6 +16,11 @@ final class Suppression
         public readonly ?string $domain = null,
         public readonly ?string $reason = null,
         public readonly ?string $createdAt = null,
+        /**
+         * Set by Ahasend when the recipient made the suppression decision themselves
+         * (unsubscribed or reported spam). "Delete all suppressions" keeps protected ones.
+         */
+        public readonly bool    $protected = false,
     ) {}
 
     /**
@@ -30,6 +35,7 @@ final class Suppression
             domain:    isset($data['domain']) ? (string) $data['domain'] : null,
             reason:    isset($data['reason']) ? (string) $data['reason'] : null,
             createdAt: isset($data['created_at']) ? (string) $data['created_at'] : null,
+            protected: (bool) ($data['protected'] ?? false),
         );
     }
 
@@ -45,6 +51,7 @@ final class Suppression
             'domain'     => $this->domain,
             'reason'     => $this->reason,
             'created_at' => $this->createdAt,
+            'protected'  => $this->protected,
         ];
     }
 }

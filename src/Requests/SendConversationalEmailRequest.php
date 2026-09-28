@@ -137,12 +137,16 @@ class SendConversationalEmailRequest extends Request implements HasBody
                 $fileName    = $attachment['name'] ?? 'attachment';
             }
 
-            $built[] = [
-                'file_name'    => $fileName,
-                'data'         => $content,
-                'content_type' => $contentType,
-                'base64'       => true,
-            ];
+            $built[] = array_filter([
+                'file_name'           => $fileName,
+                'data'                => $content,
+                'content_type'        => $contentType,
+                'base64'              => true,
+                // Set content_id (e.g. "<image1@example.com>") to reference the attachment
+                // inline via cid:image1@example.com in html_content.
+                'content_id'          => $attachment['content_id'] ?? null,
+                'content_disposition' => $attachment['content_disposition'] ?? null,
+            ], static fn (mixed $value): bool => $value !== null);
         }
 
         return $built;

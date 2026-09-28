@@ -115,8 +115,16 @@ class WebhookController extends Controller
      */
     private function dispatchEvent(string $event, string $messageId, string $recipient, array $payload): void
     {
+        // `delivery_attempt` (smtp_code, enhanced_status_code, response, description,
+        // classification, command) is present on message.delivered/transient_error only when
+        // Ahasend actually recorded one SMTP attempt for the event — absent is normal, not an
+        // error. message.bounced deliberately does not read this: a real captured bounce
+        // payload showed no delivery_attempt or reason data on that event at all (see
+        // MailBounced's docblock) — the reason instead arrives on suppression.created.
+        $deliveryAttempt = is_array($payload['delivery_attempt'] ?? null) ? $payload['delivery_attempt'] : null;
+
         match ($event) {
-            'message.delivered'       => MailDelivered::dispatch($messageId, $recipient, $payload),
+            'message.delivered'       => MailDelivered::dispatch($messageId, $recipient, $deliveryAttempt, $payload),
             'message.opened'          => MailOpened::dispatch($messageId, $recipient, $payload),
             'message.clicked'         => MailClicked::dispatch(
                 $messageId,
@@ -124,28 +132,23 @@ class WebhookController extends Controller
                 $payload['url'] ?? null,
                 $payload,
             ),
-            'message.failed'          => MailFailed::dispatch(
-                $messageId,
-                $recipient,
-                $payload['reason'] ?? null,
-                $payload,
-            ),
+            // message.failed reports retry exhaustion, never one specific SMTP attempt —
+            // Ahasend's payload carries no reason text for it.
+            'message.failed'          => MailFailed::dispatch($messageId, $recipient, null, $payload),
             'message.bounced'         => MailBounced::dispatch(
                 $messageId,
                 $recipient,
                 $payload['bounce_type'] ?? null,
                 $payload,
             ),
-            'message.suppressed'      => MailSuppressed::dispatch(
-                $messageId,
-                $recipient,
-                $payload['suppression_type'] ?? null,
-                $payload,
-            ),
+            // message.suppressed carries no suppression-reason field — see the matching
+            // suppression.created event's `reason` for that.
+            'message.suppressed'      => MailSuppressed::dispatch($messageId, $recipient, null, $payload),
             'message.transient_error' => MailTransientError::dispatch(
                 $messageId,
                 $recipient,
-                $payload['reason'] ?? null,
+                $deliveryAttempt['description'] ?? $deliveryAttempt['response'] ?? null,
+                $deliveryAttempt,
                 $payload,
             ),
             // `message.routing` deliberately not handled here: routed inbound
@@ -156,7 +159,7 @@ class WebhookController extends Controller
             'domain.dns_error'        => $this->handleDomainDnsError($payload),
             'suppression.created'     => SuppressionCreated::dispatch(
                 $payload['email'] ?? $recipient,
-                $payload['type'] ?? null,
+                $payload['reason'] ?? null,
                 $payload,
             ),
             default                   => Log::debug("Ahasend webhook: unhandled event [{$event}]"),

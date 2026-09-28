@@ -11,6 +11,11 @@ use Saloon\Enums\Method;
 use Saloon\Http\Request;
 use Saloon\Traits\Body\HasJsonBody;
 
+/**
+ * Sends via the plain `/messages` endpoint, which does not accept `cc`/`bcc` at all —
+ * {@see \GraystackIT\Ahasend\AhasendService::resolveRequest()} always routes a message with
+ * cc/bcc through {@see SendConversationalEmailRequest} instead, before this class is reached.
+ */
 class SendEmailWithAttachmentsRequest extends Request implements HasBody
 {
     use HasJsonBody;
@@ -45,14 +50,6 @@ class SendEmailWithAttachmentsRequest extends Request implements HasBody
 
         if ($this->message->textContent !== null) {
             $payload['text_content'] = $this->message->textContent;
-        }
-
-        if (! empty($this->message->cc)) {
-            $payload['cc'] = $this->message->cc;
-        }
-
-        if (! empty($this->message->bcc)) {
-            $payload['bcc'] = $this->message->bcc;
         }
 
         return $this->appendOptionalFields($payload);
@@ -104,6 +101,10 @@ class SendEmailWithAttachmentsRequest extends Request implements HasBody
             $payload['sandbox'] = $this->message->sandbox;
         }
 
+        if ($this->message->templateId !== null) {
+            $payload['template_id'] = $this->message->templateId;
+        }
+
         return $payload;
     }
 
@@ -134,12 +135,16 @@ class SendEmailWithAttachmentsRequest extends Request implements HasBody
                 $name     = $attachment['name'] ?? 'attachment';
             }
 
-            $built[] = [
-                'file_name'    => $name,
-                'data'         => $content,
-                'content_type' => $mimeType,
-                'base64'       => true,
-            ];
+            $built[] = array_filter([
+                'file_name'           => $name,
+                'data'                => $content,
+                'content_type'        => $mimeType,
+                'base64'              => true,
+                // Set content_id (e.g. "<image1@example.com>") to reference the attachment
+                // inline via cid:image1@example.com in html_content.
+                'content_id'          => $attachment['content_id'] ?? null,
+                'content_disposition' => $attachment['content_disposition'] ?? null,
+            ], static fn (mixed $value): bool => $value !== null);
         }
 
         return $built;

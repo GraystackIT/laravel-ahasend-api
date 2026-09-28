@@ -27,8 +27,9 @@ it('creates an SMTP credential and returns the DTO with password', function (): 
             'id'       => 'cred-001',
             'name'     => 'My App',
             'username' => 'smtp_my_app',
-            'host'     => 'smtp.ahasend.com',
-            'port'     => 587,
+            'sandbox'  => false,
+            'scope'    => 'scoped',
+            'domains'  => ['example.com'],
             'password' => 'generated-secret',
         ], 201),
     ]);
@@ -43,7 +44,8 @@ it('creates an SMTP credential and returns the DTO with password', function (): 
         ->and($credential->id)->toBe('cred-001')
         ->and($credential->name)->toBe('My App')
         ->and($credential->password)->toBe('generated-secret')
-        ->and($credential->port)->toBe(587);
+        ->and($credential->scope)->toBe('scoped')
+        ->and($credential->domains)->toBe(['example.com']);
 });
 
 it('throws InvalidArgumentException when credential name is empty', function (): void {
@@ -72,8 +74,8 @@ it('lists SMTP credentials as an array of DTOs', function (): void {
     $mockClient = new MockClient([
         ListSmtpCredentialsRequest::class => MockResponse::make([
             'data' => [
-                ['id' => 'cred-001', 'name' => 'App One', 'username' => 'user1', 'host' => 'smtp.ahasend.com', 'port' => 587],
-                ['id' => 'cred-002', 'name' => 'App Two', 'username' => 'user2', 'host' => 'smtp.ahasend.com', 'port' => 587],
+                ['id' => 'cred-001', 'name' => 'App One', 'username' => 'user1', 'scope' => 'global'],
+                ['id' => 'cred-002', 'name' => 'App Two', 'username' => 'user2', 'scope' => 'global'],
             ],
         ], 200),
     ]);
@@ -110,8 +112,7 @@ it('retrieves a single SMTP credential by ID', function (): void {
             'id'       => 'cred-001',
             'name'     => 'My App',
             'username' => 'smtp_my_app',
-            'host'     => 'smtp.ahasend.com',
-            'port'     => 587,
+            'scope'    => 'global',
         ], 200),
     ]);
 
