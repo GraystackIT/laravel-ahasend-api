@@ -4,9 +4,14 @@ declare(strict_types=1);
 
 namespace GraystackIT\Ahasend\Http\Controllers;
 
+use GraystackIT\Ahasend\Contracts\InboundScreen;
+use GraystackIT\Ahasend\Data\InboundDelivery;
 use GraystackIT\Ahasend\Data\InboundMessage;
 use GraystackIT\Ahasend\Events\InboundMailReceived;
+use GraystackIT\Ahasend\Jobs\ProcessInboundDelivery;
 use GraystackIT\Ahasend\Models\AhasendRoute;
+use GraystackIT\Ahasend\Support\InboundChannel;
+use GraystackIT\Ahasend\Support\InboundChannels;
 use GraystackIT\Ahasend\Support\InboundSecrets;
 use GraystackIT\Ahasend\Support\PayloadCapture;
 use GraystackIT\Ahasend\Traits\VerifiesWebhookSignature;
@@ -14,6 +19,8 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Routing\Controller;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Str;
 
 /**
  * Receives inbound mail from an Ahasend route.
@@ -21,11 +28,14 @@ use Illuminate\Support\Facades\Log;
  * Separate from the event webhook because a route signs with its own secret,
  * not the account-wide webhook secret.
  *
- * Two ways in, because there are two ways a route comes into existence:
+ * Three ways in:
  *
- * - `/{static_path}` for routes managed in the dashboard. Their secrets are
- *   configured per domain, which is the simple case for an application's own
- *   few domains.
+ * - `/{static_path}/{channel}` for a named channel registered in
+ *   {@see InboundChannels}: one endpoint per receiving domain, verified against
+ *   that channel's secret only, with its own rate limit and queue.
+ * - `/{static_path}` for routes managed in the dashboard that have not moved to
+ *   a channel yet. Deprecated: it tries the configured secret of whichever
+ *   domain the payload names.
  * - `/{path}/{route}` for routes this package provisions per customer domain.
  *   There is no chance to put those secrets in a config file, so the route id
  *   in the URL is what the stored secret is looked up by.
@@ -33,8 +43,10 @@ use Illuminate\Support\Facades\Log;
  * Either way the secret that verifies the payload is what authenticates the
  * delivery domain — see {@see InboundMailReceived::$deliveredForDomain}.
  *
- * Deliberately minimal: verify, normalise, fire an event, return 200. Anything
- * slower risks an Ahasend retry and therefore a duplicate.
+ * Deliberately minimal: verify, store, queue, return 200. With a handoff queue
+ * configured nothing else happens inside the request — screening and every
+ * listener run in {@see ProcessInboundDelivery}. Without one the screen and the
+ * event run inline, as they always did.
  */
 class InboundRouteController extends Controller
 {
@@ -75,6 +87,38 @@ class InboundRouteController extends Controller
     }
 
     /**
+     * Handle inbound mail arriving on a named channel.
+     *
+     * Only the channel's own secret is tried. An unknown channel answers like a
+     * bad signature, so the response does not tell the two apart.
+     */
+    public function handleChannel(Request $request, string $channel, InboundChannels $channels): JsonResponse
+    {
+        $inboundChannel = $channels->get($channel);
+
+        if (! $inboundChannel instanceof InboundChannel) {
+            return $this->rejectSignature($request, ['channel' => $channel, 'reason' => 'unknown channel']);
+        }
+
+        $secret = $channels->secretFor($inboundChannel);
+
+        // An empty secret would make signatureIsValid() accept anything.
+        if ($secret === null) {
+            Log::error('Ahasend inbound: channel has no signing secret, refusing delivery', [
+                'channel' => $channel,
+            ]);
+
+            return response()->json(['error' => 'Channel not configured'], 503);
+        }
+
+        if (! $this->signatureIsValid($request, $secret)) {
+            return $this->rejectSignature($request, ['channel' => $channel]);
+        }
+
+        return $this->accept($request, $inboundChannel->domain, null, null, $inboundChannel);
+    }
+
+    /**
      * Handle inbound mail arriving on a route managed in the dashboard.
      *
      * The configured secret of the delivery domain verifies the payload, and
@@ -83,7 +127,10 @@ class InboundRouteController extends Controller
     public function handleStatic(Request $request): JsonResponse
     {
         /** @var array<string, string> $secrets */
-        $secrets = (array) config('ahasend.inbound.secrets', []);
+        $secrets = [
+            ...(array) config('ahasend.inbound.secrets', []),
+            ...app(InboundChannels::class)->secretsByDomain(),
+        ];
 
         if ($secrets === []) {
             Log::error('Ahasend inbound: no route secret configured, refusing delivery', [
@@ -141,32 +188,92 @@ class InboundRouteController extends Controller
     }
 
     /**
-     * Normalise a verified payload and announce it.
+     * Hand a verified payload on.
+     *
+     * With a handoff queue the raw body goes to the handoff disk and a job is
+     * queued — nothing else runs inside the request. Without one the screen
+     * and the event run inline.
      */
     private function accept(
         Request $request,
         string $domain,
         ?AhasendRoute $route = null,
         ?InboundMessage $message = null,
+        ?InboundChannel $channel = null,
     ): JsonResponse {
-        $message ??= $this->message($request);
+        $channel ??= app(InboundChannels::class)->forDomain($domain);
+        $deliveryId = $this->webhookDeliveryId($request) ?: (string) $request->json('data.message_id', $request->json('message_id', ''));
 
         PayloadCapture::write($request, $domain, ['delivered_for_domain' => $domain]);
 
         Log::debug('Ahasend inbound: message received', [
-            'domain'     => $domain,
-            'route'      => $route?->public_id,
-            'message_id' => $message->messageId,
-            'from'       => $message->from,
-            'recipient'  => $message->recipient,
+            'domain'      => $domain,
+            'route'       => $route?->public_id,
+            'channel'     => $channel?->name,
+            'delivery_id' => $deliveryId,
         ]);
 
-        InboundMailReceived::dispatch(
-            $message,
-            $this->webhookDeliveryId($request) ?: $message->messageId,
-            $domain,
-            $route,
+        $queue = $channel?->queue ?? trim((string) config('ahasend.inbound.handoff.queue', ''));
+
+        if ($queue !== '') {
+            return $this->handOff($request, $queue, $deliveryId, $domain, $route, $channel);
+        }
+
+        $message ??= $this->message($request);
+
+        $delivery = new InboundDelivery(
+            message: $message,
+            deliveryId: $deliveryId !== '' ? $deliveryId : $message->messageId,
+            deliveredForDomain: $domain,
+            route: $route,
+            channel: $channel?->name,
         );
+
+        $verdict = app(InboundScreen::class)->screen($delivery);
+
+        // Inline there is no queue to release the delivery back to, so a
+        // deferral asks Ahasend to deliver it again later instead.
+        if ($verdict->defers()) {
+            return response()
+                ->json(['error' => 'Try again later'], 503)
+                ->header('Retry-After', (string) $verdict->delaySeconds);
+        }
+
+        if ($verdict->accepts()) {
+            InboundMailReceived::dispatch($delivery->message, $delivery->deliveryId, $domain, $route);
+        }
+
+        return response()->json(['status' => 'ok']);
+    }
+
+    /**
+     * Store the raw body and queue its processing.
+     */
+    private function handOff(
+        Request $request,
+        string $queue,
+        string $deliveryId,
+        string $domain,
+        ?AhasendRoute $route,
+        ?InboundChannel $channel,
+    ): JsonResponse {
+        $disk = (string) config('ahasend.inbound.handoff.disk', 'local');
+        $path = 'ahasend-inbound/' . now()->format('Y-m-d') . '/' . Str::uuid()->toString() . '.json';
+
+        Storage::disk($disk)->put($path, $request->getContent());
+
+        $job = new ProcessInboundDelivery(
+            disk: $disk,
+            path: $path,
+            deliveryId: $deliveryId !== '' ? $deliveryId : $path,
+            deliveredForDomain: $domain,
+            routeId: $route?->getKey(),
+            channel: $channel?->name,
+        );
+
+        $connection = trim((string) config('ahasend.inbound.handoff.connection', ''));
+
+        dispatch($job->onQueue($queue)->onConnection($connection !== '' ? $connection : null));
 
         return response()->json(['status' => 'ok']);
     }
@@ -179,11 +286,7 @@ class InboundRouteController extends Controller
         /** @var array<string, mixed> $payload */
         $payload = $request->json()->all();
 
-        // Standard Webhooks format: { type, timestamp, data: { ... } }
-        /** @var array<string, mixed> $data */
-        $data = (array) ($payload['data'] ?? $payload);
-
-        return InboundMessage::fromArray($data);
+        return InboundMessage::fromPayload($payload);
     }
 
     /**

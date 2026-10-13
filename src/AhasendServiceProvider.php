@@ -8,6 +8,8 @@ use GraystackIT\Ahasend\Connectors\AhasendConnector;
 use GraystackIT\Ahasend\Console\ExpireDomainsCommand;
 use GraystackIT\Ahasend\Console\ImportRouteCommand;
 use GraystackIT\Ahasend\Console\PollDomainsCommand;
+use GraystackIT\Ahasend\Console\PruneInboundHandoffsCommand;
+use GraystackIT\Ahasend\Contracts\InboundScreen;
 use GraystackIT\Ahasend\Mail\AhaSendTransport;
 use GraystackIT\Ahasend\Services\DomainManager;
 use GraystackIT\Ahasend\Services\DomainService;
@@ -17,7 +19,12 @@ use GraystackIT\Ahasend\Services\RouteManager;
 use GraystackIT\Ahasend\Services\RouteService;
 use GraystackIT\Ahasend\Services\SmtpCredentialService;
 use GraystackIT\Ahasend\Services\SuppressionService;
+use GraystackIT\Ahasend\Support\AcceptAllScreen;
+use GraystackIT\Ahasend\Support\InboundChannels;
+use Illuminate\Cache\RateLimiting\Limit;
+use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Mail;
+use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\ServiceProvider;
 
 class AhasendServiceProvider extends ServiceProvider
@@ -83,6 +90,11 @@ class AhasendServiceProvider extends ServiceProvider
             return new RouteManager($this->app->make(RouteService::class));
         });
 
+        $this->app->singleton(InboundChannels::class);
+
+        // An application screens deliveries by binding its own implementation.
+        $this->app->bindIf(InboundScreen::class, AcceptAllScreen::class);
+
         $this->app->singleton(DomainManager::class, function (): DomainManager {
             return new DomainManager(
                 $this->app->make(DomainService::class),
@@ -98,6 +110,7 @@ class AhasendServiceProvider extends ServiceProvider
                 PollDomainsCommand::class,
                 ExpireDomainsCommand::class,
                 ImportRouteCommand::class,
+                PruneInboundHandoffsCommand::class,
             ]);
 
             // Publish config.
@@ -114,12 +127,35 @@ class AhasendServiceProvider extends ServiceProvider
         // Load migrations so they can run without publishing.
         $this->loadMigrationsFrom(__DIR__ . '/../database/migrations');
 
+        $this->registerChannelLimiter();
+
         // Register webhook route (excluded from CSRF middleware by default).
         $this->loadRoutesFrom(__DIR__ . '/../routes/webhooks.php');
 
         // Register the 'ahasend' Laravel mail transport driver.
         Mail::extend('ahasend', function () {
             return new AhaSendTransport($this->app->make(AhasendService::class));
+        });
+    }
+
+    /**
+     * The rate limit of the named channel endpoints.
+     *
+     * Keyed by channel and caller together: by channel alone, anybody posting
+     * junk to a channel would use up the budget Ahasend's own deliveries need.
+     */
+    private function registerChannelLimiter(): void
+    {
+        RateLimiter::for('ahasend-inbound-channel', function (Request $request): Limit {
+            $perMinute = (int) config('ahasend.inbound.channel_throttle', 120);
+
+            if ($perMinute <= 0) {
+                return Limit::none();
+            }
+
+            return Limit::perMinute($perMinute)->by(
+                'ahasend-inbound:' . (string) $request->route('channel') . '|' . (string) $request->ip(),
+            );
         });
     }
 }

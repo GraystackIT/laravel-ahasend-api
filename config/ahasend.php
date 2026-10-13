@@ -130,6 +130,14 @@ return [
     |                so a captured request cannot be replayed indefinitely.
     | - throttle:    rate limit for the public inbound and webhook endpoints,
     |                as "attempts,minutes". Empty disables it.
+    | - channel_throttle: requests per minute per channel and caller on
+    |                the named channel endpoints. Empty or 0 disables it.
+    | - handoff:     where a verified delivery waits for its worker. With a
+    |                queue set, the request only stores the raw body on `disk`
+    |                and queues ProcessInboundDelivery; screening and every
+    |                listener run there. Without one they run inside the
+    |                request, as before. `retry_hours` bounds how long a
+    |                delivery the screen deferred keeps being retried.
     | - defaults:    options every provisioned route is created with. Grouping by
     |                message id must stay off: one request per recipient is what
     |                makes Ahasend fan a multi-recipient mail out for us, each
@@ -151,6 +159,13 @@ return [
         'base_url'    => env('AHASEND_INBOUND_BASE_URL', env('APP_URL')),
         'tolerance'   => (int) env('AHASEND_WEBHOOK_TOLERANCE_SECONDS', 300),
         'throttle'    => env('AHASEND_INBOUND_THROTTLE', '120,1'),
+        'channel_throttle' => env('AHASEND_INBOUND_CHANNEL_THROTTLE', 120),
+        'handoff' => [
+            'queue'       => env('AHASEND_INBOUND_QUEUE'),
+            'connection'  => env('AHASEND_INBOUND_QUEUE_CONNECTION'),
+            'disk'        => env('AHASEND_INBOUND_DISK', 'local'),
+            'retry_hours' => (int) env('AHASEND_INBOUND_RETRY_HOURS', 24),
+        ],
         'defaults' => [
             'attachments'         => (bool) env('AHASEND_INBOUND_ATTACHMENTS', true),
             'headers'             => (bool) env('AHASEND_INBOUND_HEADERS', true),

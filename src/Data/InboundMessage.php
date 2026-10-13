@@ -55,6 +55,22 @@ final class InboundMessage
     ) {}
 
     /**
+     * Build from a whole webhook body.
+     *
+     * Standard Webhooks wrap the message as `{ type, timestamp, data: { ... } }`;
+     * a bare message is accepted as well.
+     *
+     * @param  array<string, mixed>  $payload
+     */
+    public static function fromPayload(array $payload): self
+    {
+        /** @var array<string, mixed> $data */
+        $data = (array) ($payload['data'] ?? $payload);
+
+        return self::fromArray($data);
+    }
+
+    /**
      * Build from the `data` object of a `message.routing` webhook payload.
      *
      * @param  array<string, mixed>  $data

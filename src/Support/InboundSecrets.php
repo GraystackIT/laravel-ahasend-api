@@ -91,7 +91,7 @@ final class InboundSecrets
     /**
      * Lower-case and strip stray whitespace, brackets and trailing dots.
      */
-    private static function normaliseDomain(string $domain): string
+    public static function normaliseDomain(string $domain): string
     {
         return strtolower(trim(rtrim(trim($domain, " \t\n\r\0\x0B<>"), '.')));
     }

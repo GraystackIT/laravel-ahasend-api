@@ -714,12 +714,87 @@ That leaves two ways to hold those secrets, and the package serves both:
 | Endpoint | For | Secret |
 | --- | --- | --- |
 | `POST /ahasend/webhook` | delivery, bounces, suppressions, `domain.dns_error` | `AHASEND_WEBHOOK_SECRET` |
-| `POST /ahasend/inboundmail` | routes you create in the dashboard | `AHASEND_INBOUND_SECRET` |
+| `POST /ahasend/inboundmail/{channel}` | one named channel per receiving domain you own | registered with the channel |
+| `POST /ahasend/inboundmail` | dashboard routes not yet moved to a channel (deprecated) | `AHASEND_INBOUND_SECRETS` |
 | `POST /ahasend/inbound/{route}` | routes the package provisions per customer domain | stored with the route |
 
+### Channels: one endpoint per receiving domain
+
+Register each of your own receiving domains as a channel, in the service provider of
+whatever part of the application consumes its mail. The secret comes from that part's own
+configuration, so domain and secret sit next to each other in the environment:
+
+```php
+use GraystackIT\Ahasend\Support\InboundChannels;
+
+app(InboundChannels::class)->register(
+    name: 'payslip',                                      // → POST /ahasend/inboundmail/payslip
+    domain: config('payroll.mail.receiving_domain'),
+    secret: config('payroll.mail.inbound_secret'),        // e.g. PAYROLL_MAIL_SECRET
+    queue: null,                                          // optional, see "Handoff" below
+);
+```
+
+Point the dashboard route of that domain at the channel URL. A channel is verified against
+its own secret only, carries its own rate limit (`AHASEND_INBOUND_CHANNEL_THROTTLE` requests
+per minute, keyed by channel *and* caller, so junk posted to one channel neither throttles
+another nor uses up the budget AhaSend needs), and shows up as its own endpoint in
+monitoring. An unknown channel answers exactly like a bad signature.
+
+A channel registered without a secret falls back to the `AHASEND_INBOUND_SECRETS` entry of
+its domain, and channel secrets are also accepted on the shared `/ahasend/inboundmail`
+endpoint — so routes can be moved over one at a time with the same values.
+
+### Handoff: the webhook returns at once
+
+Set `AHASEND_INBOUND_QUEUE` and every endpoint does only this inside the request: verify the
+signature, write the raw body to `AHASEND_INBOUND_DISK` (`ahasend-inbound/{date}/{uuid}.json`),
+queue `ProcessInboundDelivery`, answer `200`. Screening and every listener run in the worker.
+The body travels on the disk rather than in the job because attachments are megabytes of
+base64 and queue dashboards keep job payloads in memory for hours. A channel's own `queue`
+overrides the default.
+
+The job retries two things differently. A listener exception is retried with backoff, at
+most three times — safe because listeners have to be idempotent on `$deliveryId` anyway.
+A *deferral* by the screen (see below) releases the job without counting as a failure,
+until `AHASEND_INBOUND_RETRY_HOURS` (default 24) have passed. Bodies left behind by jobs that
+failed for good are removed by `php artisan ahasend:prune-inbound-handoffs --days=3`;
+schedule it, since they contain personal data.
+
+Without a queue configured, everything runs inside the request as before.
+
+### Screening every delivery before any listener
+
+Bind your own `GraystackIT\Ahasend\Contracts\InboundScreen` to refuse a delivery for every
+consumer at once — a virus scan is the case it exists for:
+
+```php
+$this->app->bind(InboundScreen::class, VirusScreen::class);
+
+final class VirusScreen implements InboundScreen
+{
+    public function screen(InboundDelivery $delivery): ScreenVerdict
+    {
+        // ScreenVerdict::accept()      — hand it to the listeners
+        // ScreenVerdict::discard()     — drop it; no listener ever sees it
+        // ScreenVerdict::defer(300)    — ask again in five minutes
+    }
+
+    public function gaveUp(InboundDelivery $delivery): void
+    {
+        // Deferred until the retry window closed; tell the sender if you like.
+    }
+}
+```
+
+Inline (no handoff queue), a deferral answers `503` with `Retry-After`, so AhaSend delivers
+again later. The default screen accepts everything.
+
+### Routes created in the dashboard (legacy shared endpoint)
+
 **Use the dashboard for your own domains.** They are few and known up front, so create the
-route by hand, point it at `/ahasend/inboundmail` and put its secret in the environment —
-one secret per domain:
+route by hand, point it at its channel (or, the older way, at `/ahasend/inboundmail`) and
+put its secret in the environment — one secret per domain:
 
 ```dotenv
 AHASEND_INBOUND_SECRETS="postbox.example.com:whsec_postbox,tickets.example.com:whsec_tickets"
@@ -750,7 +825,7 @@ configured, and a provisioned route whose stored secret is empty — both answer
 because on a public endpoint "no secret" must never mean "no verification". Signed
 timestamps are checked against a tolerance window (`AHASEND_WEBHOOK_TOLERANCE_SECONDS`,
 default 300) so a captured request cannot be replayed forever, and all three endpoints carry
-a rate limit (`AHASEND_INBOUND_THROTTLE`, default `120,1`).
+a rate limit (`AHASEND_INBOUND_THROTTLE`, default `120,1`; channels use their own).
 
 ```php
 use GraystackIT\Ahasend\Events\InboundMailReceived;
@@ -759,7 +834,8 @@ class RouteInboundMail
 {
     public function handle(InboundMailReceived $event): void
     {
-        // Queue the real work: AhaSend retries on any non-2xx response, so slow
+        // With a handoff queue this already runs in a worker. Without one, queue
+        // the real work: AhaSend retries on any non-2xx response, so slow
         // synchronous handling produces duplicates. $deliveryId is stable across
         // those retries — use it as the idempotency key.
         ProcessInboundMail::dispatch($event->message, $event->deliveryId);

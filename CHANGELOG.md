@@ -6,6 +6,23 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+### Added
+- **Inbound channels.** `InboundChannels::register($name, $domain, $secret, $queue)` gives each
+  receiving domain its own endpoint, `POST {static_path}/{channel}`, verified against that
+  channel's secret only and rate limited per channel and caller
+  (`AHASEND_INBOUND_CHANNEL_THROTTLE`, default 120/min). An unknown channel answers like a bad
+  signature. Channel secrets are also accepted by the shared `/ahasend/inboundmail` endpoint,
+  which is now deprecated, and a channel without a secret falls back to `AHASEND_INBOUND_SECRETS`.
+- **Asynchronous handoff.** With `AHASEND_INBOUND_QUEUE` set, every inbound endpoint only
+  verifies, writes the raw body to `AHASEND_INBOUND_DISK` and queues `ProcessInboundDelivery`;
+  the event fires in the worker. Listener exceptions are retried three times with backoff;
+  without a queue nothing changes.
+- **Screening.** Bind `Contracts\InboundScreen` to accept, discard or defer every delivery before
+  any listener sees it. Deferrals are retried until `AHASEND_INBOUND_RETRY_HOURS` (default 24),
+  then `gaveUp()` is called. Inline, a deferral answers 503 with `Retry-After`.
+- `ahasend:prune-inbound-handoffs --days=3` removes bodies left behind by failed jobs.
+- `InboundMessage::fromPayload()` builds a message from a whole webhook body.
+
 Follow-up drift pass (2026-09-28), scoped to what the 0.2.0/0.2.1 audit above didn't already
 cover. `message.bounced`/`MailBounced` deliberately untouched — 0.2.0 already verified that
 event against a real captured payload and reached the same "no reason data on this event"

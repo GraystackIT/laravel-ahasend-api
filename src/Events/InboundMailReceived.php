@@ -11,9 +11,12 @@ use Illuminate\Foundation\Events\Dispatchable;
 /**
  * Fired for every verified inbound mail delivered by a route.
  *
- * Listeners must do their work on a queue: Ahasend retries on any non-2xx
- * response, so slow synchronous handling produces duplicates and timeouts.
- * The `deliveryId` is stable across those retries and is the idempotency key.
+ * With a handoff queue configured this fires in a worker, after the
+ * application's screen accepted the delivery. Without one it fires inside the
+ * webhook request, and listeners must queue their work themselves: Ahasend
+ * retries on any non-2xx response, so slow synchronous handling produces
+ * duplicates and timeouts. Either way a delivery can arrive more than once —
+ * the `deliveryId` is stable across retries and is the idempotency key.
  */
 class InboundMailReceived
 {
