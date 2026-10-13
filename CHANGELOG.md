@@ -22,6 +22,17 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
   then `gaveUp()` is called. Inline, a deferral answers 503 with `Retry-After`.
 - `ahasend:prune-inbound-handoffs --days=3` removes bodies left behind by failed jobs.
 - `InboundMessage::fromPayload()` builds a message from a whole webhook body.
+- `EmailMessage::SUPPORTS_INLINE_ATTACHMENTS`, a capability marker. An application that builds
+  inline images has no other way to ask which version of this package it is talking to, and the
+  failure it guards against — a mail full of broken images — is invisible to the sender.
+
+### Changed
+- An attachment's `content_id` is sent in the bracketed form the API requires (a bare id is
+  wrapped), and `content_disposition: inline` is set alongside unless the caller states one —
+  without either, the same file is delivered as a download and the `cid:` in the body resolves to
+  nothing.
+- The two send requests build their attachment payload through one shared `BuildsAttachments`
+  concern instead of a copy each.
 
 Follow-up drift pass (2026-09-28), scoped to what the 0.2.0/0.2.1 audit above didn't already
 cover. `message.bounced`/`MailBounced` deliberately untouched — 0.2.0 already verified that

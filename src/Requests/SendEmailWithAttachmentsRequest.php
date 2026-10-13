@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace GraystackIT\Ahasend\Requests;
 
 use GraystackIT\Ahasend\Data\EmailMessage;
-use GraystackIT\Ahasend\Exceptions\AhasendException;
+use GraystackIT\Ahasend\Requests\Concerns\BuildsAttachments;
 use Saloon\Contracts\Body\HasBody;
 use Saloon\Enums\Method;
 use Saloon\Http\Request;
@@ -18,6 +18,7 @@ use Saloon\Traits\Body\HasJsonBody;
  */
 class SendEmailWithAttachmentsRequest extends Request implements HasBody
 {
+    use BuildsAttachments;
     use HasJsonBody;
 
     protected Method $method = Method::POST;
@@ -106,47 +107,5 @@ class SendEmailWithAttachmentsRequest extends Request implements HasBody
         }
 
         return $payload;
-    }
-
-    /**
-     * @return array<int, array<string, string>>
-     */
-    private function buildAttachments(): array
-    {
-        $built = [];
-
-        foreach ($this->message->attachments as $attachment) {
-            if (isset($attachment['path'])) {
-                $path = $attachment['path'];
-
-                if (! file_exists($path) || ! is_readable($path)) {
-                    throw AhasendException::make("Attachment file not found or unreadable: {$path}");
-                }
-
-                $content  = base64_encode((string) file_get_contents($path));
-                $mimeType = $attachment['mime_type'] ?? mime_content_type($path) ?: 'application/octet-stream';
-                $name     = $attachment['name'] ?? basename($path);
-            } else {
-                $rawContent = $attachment['content'] ?? '';
-                $content    = base64_encode(base64_decode($rawContent, strict: true) !== false
-                    ? base64_decode($rawContent)
-                    : $rawContent);
-                $mimeType = $attachment['mime_type'] ?? 'application/octet-stream';
-                $name     = $attachment['name'] ?? 'attachment';
-            }
-
-            $built[] = array_filter([
-                'file_name'           => $name,
-                'data'                => $content,
-                'content_type'        => $mimeType,
-                'base64'              => true,
-                // Set content_id (e.g. "<image1@example.com>") to reference the attachment
-                // inline via cid:image1@example.com in html_content.
-                'content_id'          => $attachment['content_id'] ?? null,
-                'content_disposition' => $attachment['content_disposition'] ?? null,
-            ], static fn (mixed $value): bool => $value !== null);
-        }
-
-        return $built;
     }
 }

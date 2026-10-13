@@ -109,24 +109,29 @@ $mailer->sendWithAttachments(
 );
 ```
 
-Each attachment also accepts an optional `content_id` and `content_disposition`. Set `content_id` to reference the attachment inline from `htmlContent` (e.g. `<img src="cid:image1@example.com">`):
+### Inline images
+
+An attachment carrying a `content_id` is delivered as an inline part, which the HTML body
+references as `cid:{id}` — the image appears inside the message instead of under it:
 
 ```php
 $mailer->sendWithAttachments(
     to:          [['email' => 'user@example.com']],
-    subject:     'Inline image',
+    subject:     'Where to click',
     attachments: [
-        [
-            'name' => 'logo.png',
-            'content' => $pngBase64,
-            'mime_type' => 'image/png',
-            'content_id' => '<image1@example.com>',
-            'content_disposition' => 'inline',
-        ],
+        ['name' => 'step-1.png', 'content' => $png, 'mime_type' => 'image/png', 'content_id' => 'step-1@app'],
     ],
-    htmlContent: '<p><img src="cid:image1@example.com"></p>',
+    htmlContent: '<p>Click here:</p><img src="cid:step-1@app">',
 );
 ```
+
+The angle brackets the API requires are added for you; pass the bare id (a bracketed one is
+kept as it is). `content_disposition` becomes `inline` alongside, unless you pass one yourself.
+An attachment without a `content_id` stays an ordinary download.
+
+`EmailMessage::SUPPORTS_INLINE_ATTACHMENTS` exists so an application can tell whether the
+installed version of this package carries the field — sending `cid:` markup to a version
+that drops it produces broken images at the recipient, which the sender never sees.
 
 ### Templated email
 

@@ -158,7 +158,7 @@ class AhasendService
      * Convenience method: send an email with file attachments.
      *
      * @param  array<int, array{email: string, name?: string}>  $to
-     * @param  array<int, array{name: string, content: string, mime_type: string}>  $attachments
+     * @param  array<int, array{name: string, content: string, mime_type: string, content_id?: string, content_disposition?: string}>  $attachments
      * @throws AhasendException
      */
     public function sendWithAttachments(

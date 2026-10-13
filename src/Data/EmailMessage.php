@@ -10,6 +10,18 @@ namespace GraystackIT\Ahasend\Data;
 final class EmailMessage
 {
     /**
+     * Whether an attachment of this message may carry a `content_id`, and with
+     * it appear as an inline image rather than as a file to download.
+     *
+     * A capability marker, not a switch. An application that builds inline
+     * images has no other way to ask which version of this package it is
+     * talking to, and sending `cid:` markup to a version that drops the field
+     * produces a mail full of broken images at the recipient — the one failure
+     * the sender never sees.
+     */
+    public const SUPPORTS_INLINE_ATTACHMENTS = true;
+
+    /**
      * @param  array<int, array{email: string, name?: string}>  $to
      * @param  array<int, array{email: string, name?: string}>  $cc
      * @param  array<int, array{email: string, name?: string}>  $bcc
