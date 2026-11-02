@@ -6,6 +6,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+## [0.3.1] - 2026-11-02
+
 ### Fixed
 - `AhasendService::send()` returns the id the API assigned to the message. It read a top-level
   `message_id` that the send endpoints have never returned. They answer with
