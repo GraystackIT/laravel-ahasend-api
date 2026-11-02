@@ -7,6 +7,7 @@ use GraystackIT\Ahasend\Connectors\AhasendConnector;
 use GraystackIT\Ahasend\Data\EmailMessage;
 use GraystackIT\Ahasend\Events\MailSent;
 use GraystackIT\Ahasend\Exceptions\AhasendException;
+use GraystackIT\Ahasend\Models\AhasendMessage;
 use GraystackIT\Ahasend\Requests\SendConversationalEmailRequest;
 use GraystackIT\Ahasend\Requests\SendEmailRequest;
 use GraystackIT\Ahasend\Requests\SendEmailWithAttachmentsRequest;
@@ -32,7 +33,7 @@ it('sends a plain-text email successfully', function (): void {
 
     $mockClient = new MockClient([
         SendEmailRequest::class => MockResponse::make(
-            ['message_id' => 'ahasend-msg-001'],
+            sendResponse('ahasend-msg-001'),
             200,
         ),
     ]);
@@ -60,7 +61,7 @@ it('sends an HTML email and selects SendHtmlEmailRequest', function (): void {
 
     $mockClient = new MockClient([
         SendHtmlEmailRequest::class => MockResponse::make(
-            ['message_id' => 'html-msg-002'],
+            sendResponse('html-msg-002'),
             200,
         ),
     ]);
@@ -84,7 +85,7 @@ it('sends an email with attachments and selects SendEmailWithAttachmentsRequest'
 
     $mockClient = new MockClient([
         SendEmailWithAttachmentsRequest::class => MockResponse::make(
-            ['message_id' => 'attach-msg-003'],
+            sendResponse('attach-msg-003'),
             200,
         ),
     ]);
@@ -115,7 +116,7 @@ it('routes to SendConversationalEmailRequest when CC is present', function (): v
 
     $mockClient = new MockClient([
         SendConversationalEmailRequest::class => MockResponse::make(
-            ['message_id' => 'conv-msg-004'],
+            sendResponse('conv-msg-004'),
             200,
         ),
     ]);
@@ -140,7 +141,7 @@ it('routes to SendConversationalEmailRequest when BCC is present', function (): 
 
     $mockClient = new MockClient([
         SendConversationalEmailRequest::class => MockResponse::make(
-            ['message_id' => 'conv-msg-005'],
+            sendResponse('conv-msg-005'),
             200,
         ),
     ]);
@@ -166,7 +167,7 @@ it('sends a templated email via sendTemplate()', function (): void {
     Event::fake([MailSent::class]);
 
     $mockClient = new MockClient([
-        SendEmailRequest::class => MockResponse::make(['message_id' => 'tmpl-msg-001'], 200),
+        SendEmailRequest::class => MockResponse::make(sendResponse('tmpl-msg-001'), 200),
     ]);
 
     $connector = app(AhasendConnector::class);
@@ -224,7 +225,7 @@ it('never sends cc/bcc on the plain messages endpoint, since Ahasend does not su
     Event::fake([MailSent::class]);
 
     $mockClient = new MockClient([
-        SendEmailWithAttachmentsRequest::class => MockResponse::make(['message_id' => 'attach-msg-004'], 200),
+        SendEmailWithAttachmentsRequest::class => MockResponse::make(sendResponse('attach-msg-004'), 200),
     ]);
 
     $connector = app(AhasendConnector::class);
@@ -297,6 +298,85 @@ it('generates a message_id when none is provided', function (): void {
     Event::assertDispatched(MailSent::class, function (MailSent $event): bool {
         return $event->message->messageId !== null && strlen($event->message->messageId) > 0;
     });
+});
+
+// ─── The id the API assigns ───────────────────────────────────────────────
+
+/**
+ * Send one plain-text mail against a mocked response body and return the id.
+ *
+ * @param  array<string, mixed>  $body
+ */
+function sendAgainst(array $body, ?string $clientId = null): string
+{
+    $connector = app(AhasendConnector::class);
+    $connector->withMockClient(new MockClient([SendEmailRequest::class => MockResponse::make($body, 202)]));
+
+    return (new AhasendService($connector))->send(new EmailMessage(
+        fromEmail:   'a@example.com',
+        fromName:    'A',
+        to:          [['email' => 'b@example.com']],
+        subject:     'Id test',
+        textContent: 'body',
+        messageId:   $clientId,
+    ));
+}
+
+it('returns the bare UUID the webhooks carry as data.id, from 9 November 2026', function (): void {
+    $response = sendResponse('0192f5a4-7b1c-7d3e-9a2b-4c5d6e7f8a9b');
+    $response['data'][0]['message_id_header'] = '<0192f5a4-0000-7000-8000-000000000000@example.com>';
+
+    expect(sendAgainst($response))->toBe('0192f5a4-7b1c-7d3e-9a2b-4c5d6e7f8a9b');
+});
+
+it('returns the bracketed Message-ID header the API answered with before the switch', function (): void {
+    expect(sendAgainst(sendResponse('<0192f5a4-0000-7000-8000-000000000000@example.com>')))
+        ->toBe('<0192f5a4-0000-7000-8000-000000000000@example.com>');
+});
+
+it('reads the first recipient of a multi-recipient response', function (): void {
+    $response = sendResponse('first-id');
+    $response['data'][] = sendResponse('second-id', 'other@example.com')['data'][0];
+
+    expect(sendAgainst($response))->toBe('first-id');
+});
+
+it('falls back to the client-side id only when the response carries no recipient list', function (): void {
+    expect(sendAgainst([], 'client-id'))->toBe('client-id');
+});
+
+it('throws instead of reporting a send that every recipient was refused', function (): void {
+    Event::fake([MailSent::class]);
+
+    expect(fn () => sendAgainst(sendResponse(null)))
+        ->toThrow(AhasendException::class, 'to@example.com: Recipient is suppressed');
+
+    Event::assertNotDispatched(MailSent::class);
+});
+
+it('returns the first accepted recipient when another one was refused', function (): void {
+    $response = sendResponse(null);
+    $response['data'][] = sendResponse('accepted-id', 'other@example.com')['data'][0];
+
+    expect(sendAgainst($response))->toBe('accepted-id');
+});
+
+it('keeps the id of every accepted recipient, on the event and in storage', function (): void {
+    Event::fake([MailSent::class]);
+    config(['ahasend.store_logs' => true, 'ahasend.storage_driver' => 'database']);
+
+    $response = sendResponse('first-id');
+    $response['data'][] = sendResponse('second-id', 'other@example.com')['data'][0];
+
+    sendAgainst($response);
+
+    Event::assertDispatched(MailSent::class, fn (MailSent $event): bool => $event->recipientMessageIds === [
+        'to@example.com'    => 'first-id',
+        'other@example.com' => 'second-id',
+    ]);
+
+    expect(AhasendMessage::query()->orderBy('message_id')->pluck('recipient', 'message_id')->all())
+        ->toBe(['first-id' => 'to@example.com', 'second-id' => 'other@example.com']);
 });
 
 // ─── Error handling ───────────────────────────────────────────────────────

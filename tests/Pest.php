@@ -47,3 +47,22 @@ function signedHeaders(array $payload, string $secret, string $deliveryId = 'whm
         'webhook-signature' => "v1,{$signature}",
     ];
 }
+
+/**
+ * A send response the way the Ahasend API answers it: a list, one entry per recipient.
+ *
+ * @return array<string, mixed>
+ */
+function sendResponse(?string $id, string $recipient = 'to@example.com'): array
+{
+    return [
+        'object' => 'list',
+        'data'   => [[
+            'object'    => 'message',
+            'id'        => $id,
+            'recipient' => ['email' => $recipient, 'name' => ''],
+            'status'    => $id === null ? 'error' : 'queued',
+            'error'     => $id === null ? 'Recipient is suppressed' : null,
+        ]],
+    ];
+}

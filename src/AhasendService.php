@@ -69,19 +69,24 @@ class AhasendService
             $response = $this->connector
                 ->sendAndRetry($request, $retryTimes, $retryDelay);
 
-            $responseData    = $response->json();
-            $ahasendMsgId    = $responseData['message_id'] ?? $message->messageId;
+            $responseData = $response->json();
+            $recipientIds = $this->acceptedRecipients(is_array($responseData) ? $responseData : [], $message);
+            $ahasendMsgId = $recipientIds === []
+                ? $this->messageIdFrom(is_array($responseData) ? $responseData : [], $message)
+                : (string) reset($recipientIds);
 
             Log::info('Ahasend: email sent successfully', [
                 'message_id'         => $message->messageId,
                 'ahasend_message_id' => $ahasendMsgId,
             ]);
 
-            $this->storeOutgoing($message, $ahasendMsgId);
+            $this->storeOutgoing($message, $ahasendMsgId, $recipientIds);
 
-            MailSent::dispatch($message, $ahasendMsgId);
+            MailSent::dispatch($message, $ahasendMsgId, $recipientIds);
 
-            return (string) $ahasendMsgId;
+            return $ahasendMsgId;
+        } catch (AhasendException $e) {
+            throw $e;
         } catch (RequestException $e) {
             Log::error('Ahasend: API request failed', [
                 'message_id' => $message->messageId,
@@ -232,9 +237,85 @@ class AhasendService
     }
 
     /**
-     * Persist outgoing email details according to the configured storage driver.
+     * The id of every recipient Ahasend accepted, keyed by their address.
+     *
+     * The send endpoints answer with a list, one entry per recipient, and each
+     * recipient becomes a message of its own with its own id. From 9 November
+     * 2026 that id is a bare UUID, the same one every message webhook carries
+     * as `data.id`; before that it was the Message-ID header in angle brackets,
+     * and a replayed request may still return that form for a day after the
+     * switch. An entry the API refused has `id: null` and `status: error`: a
+     * refusal of some recipients is logged, a refusal of all of them is thrown,
+     * because nothing was sent and reporting it as sent would hide that.
+     *
+     * Empty when the response carries no recipient list at all.
+     *
+     * @param  array<string, mixed>  $responseData
+     * @return array<string, string>
+     *
+     * @throws AhasendException When the API refused every recipient.
      */
-    private function storeOutgoing(EmailMessage $message, string $ahasendMsgId): void
+    private function acceptedRecipients(array $responseData, EmailMessage $message): array
+    {
+        $entries = is_array($responseData['data'] ?? null) ? array_filter($responseData['data'], 'is_array') : [];
+        $accepted = [];
+        $refused  = [];
+
+        foreach ($entries as $entry) {
+            $email = (string) ($entry['recipient']['email'] ?? '');
+            $id    = $entry['id'] ?? null;
+
+            if (is_string($id) && $id !== '') {
+                $accepted[$email] = $id;
+            } else {
+                $refused[$email] = (string) ($entry['error'] ?? $entry['status'] ?? 'unknown');
+            }
+        }
+
+        if ($refused !== [] && $accepted === []) {
+            Log::error('Ahasend: every recipient was refused', [
+                'message_id' => $message->messageId,
+                'refused'    => $refused,
+            ]);
+
+            throw AhasendException::make('Ahasend sent the message to none of its recipients: '.implode('; ', array_map(
+                static fn (string $email, string $reason): string => "{$email}: {$reason}",
+                array_keys($refused),
+                $refused,
+            )));
+        }
+
+        if ($refused !== []) {
+            Log::warning('Ahasend: some recipients were refused', [
+                'message_id' => $message->messageId,
+                'refused'    => $refused,
+            ]);
+        }
+
+        return $accepted;
+    }
+
+    /**
+     * The id for a response that carries no recipient list.
+     *
+     * Not a shape the send endpoints are documented to return; read anyway, so
+     * a top-level `id` is not lost, with the client-side id as the last resort.
+     *
+     * @param  array<string, mixed>  $responseData
+     */
+    private function messageIdFrom(array $responseData, EmailMessage $message): string
+    {
+        $id = $responseData['id'] ?? null;
+
+        return is_string($id) && $id !== '' ? $id : (string) $message->messageId;
+    }
+
+    /**
+     * Persist outgoing email details according to the configured storage driver.
+     *
+     * @param  array<string, string>  $recipientIds  Ahasend's id per accepted recipient.
+     */
+    private function storeOutgoing(EmailMessage $message, string $ahasendMsgId, array $recipientIds = []): void
     {
         if (! config('ahasend.store_logs', false)) {
             return;
@@ -243,13 +324,21 @@ class AhasendService
         $driver = config('ahasend.storage_driver', 'log');
 
         if ($driver === 'database') {
-            AhasendMessage::create([
-                'message_id' => $ahasendMsgId,
-                'recipient'  => collect($message->to)->pluck('email')->implode(','),
-                'subject'    => $message->subject,
-                'status'     => 'sent',
-                'payload'    => $message->toArray(),
-            ]);
+            // One row per recipient: each is a message of its own at Ahasend,
+            // and its webhooks name it by its own id.
+            $rows = $recipientIds !== []
+                ? $recipientIds
+                : [collect($message->to)->pluck('email')->implode(',') => $ahasendMsgId];
+
+            foreach ($rows as $recipient => $id) {
+                AhasendMessage::create([
+                    'message_id' => $id,
+                    'recipient'  => (string) $recipient,
+                    'subject'    => $message->subject,
+                    'status'     => 'sent',
+                    'payload'    => $message->toArray(),
+                ]);
+            }
 
             return;
         }

@@ -16,7 +16,14 @@ class MailSent
 
     public function __construct(
         public readonly EmailMessage $message,
-        /** The message_id returned by the Ahasend API. */
+        /** The id Ahasend assigned to the first accepted recipient's message. */
         public readonly ?string $ahasendMessageId = null,
+        /**
+         * Ahasend's id for every accepted recipient, keyed by address — each
+         * recipient is a message of its own, and its webhooks carry its own id.
+         *
+         * @var array<string, string>
+         */
+        public readonly array $recipientMessageIds = [],
     ) {}
 }

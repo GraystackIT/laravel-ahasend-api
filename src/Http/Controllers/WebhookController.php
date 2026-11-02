@@ -88,7 +88,19 @@ class WebhookController extends Controller
             return;
         }
 
-        if ($messageId === '') {
+        // The header as well as the id: a message sent before Ahasend's id
+        // switch on 9 November 2026 was stored under its bracketed Message-ID
+        // header, while its webhooks carry `data.id` — for up to 30 days in
+        // either the old or the new form. Only the header never changed.
+        // Rows written by 0.3.0 and earlier hold the client-side UUID instead,
+        // which no webhook names; nothing here can match those.
+        $header     = is_string($payload['message_id_header'] ?? null) ? trim(trim($payload['message_id_header']), '<>') : '';
+        $messageIds = array_values(array_unique(array_filter(
+            [$messageId, $header, $header !== '' ? "<{$header}>" : ''],
+            static fn (string $id): bool => $id !== '',
+        )));
+
+        if ($messageIds === []) {
             return;
         }
 
@@ -104,7 +116,7 @@ class WebhookController extends Controller
             default                  => $event,
         };
 
-        AhasendMessage::where('message_id', $messageId)
+        AhasendMessage::whereIn('message_id', $messageIds)
             ->update(['status' => $status, 'payload' => $payload]);
     }
 

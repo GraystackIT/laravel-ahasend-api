@@ -12,6 +12,7 @@ use GraystackIT\Ahasend\Events\MailReceived;
 use GraystackIT\Ahasend\Events\MailSuppressed;
 use GraystackIT\Ahasend\Events\MailTransientError;
 use GraystackIT\Ahasend\Events\SuppressionCreated;
+use GraystackIT\Ahasend\Models\AhasendMessage;
 use Illuminate\Support\Facades\Event;
 
 // ─── Helpers ──────────────────────────────────────────────────────────────
@@ -260,4 +261,47 @@ it('accepts request with correct Standard Webhooks signature when secret is set'
         'webhook-timestamp' => $timestamp,
         'webhook-signature' => $signature,
     ])->assertOk();
+});
+
+// ─── Stored status across Ahasend's id switch ─────────────────────────────
+
+it('updates a message stored under its Message-ID header before the id switch', function (string $eventId): void {
+    Event::fake();
+    config(['ahasend.store_logs' => true, 'ahasend.storage_driver' => 'database']);
+
+    $stored = AhasendMessage::create([
+        'message_id' => '<0192f5a4-0000-7000-8000-000000000000@example.com>',
+        'recipient'  => 'user@example.com',
+        'subject'    => 'Before the switch',
+        'status'     => 'sent',
+        'payload'    => [],
+    ]);
+
+    postWebhook(webhookPayload('message.delivered', $eventId, 'user@example.com', [
+        'message_id_header' => '<0192f5a4-0000-7000-8000-000000000000@example.com>',
+    ]))->assertOk();
+
+    expect($stored->fresh()->status)->toBe('delivered');
+})->with([
+    'old internal id' => '407926766d2711f09b30960002cafe7c',
+    'new API id'      => '0192f5a4-7b1c-7d3e-9a2b-4c5d6e7f8a9b',
+]);
+
+it('updates a message stored under the API id after the switch', function (): void {
+    Event::fake();
+    config(['ahasend.store_logs' => true, 'ahasend.storage_driver' => 'database']);
+
+    $stored = AhasendMessage::create([
+        'message_id' => '0192f5a4-7b1c-7d3e-9a2b-4c5d6e7f8a9b',
+        'recipient'  => 'user@example.com',
+        'subject'    => 'After the switch',
+        'status'     => 'sent',
+        'payload'    => [],
+    ]);
+
+    postWebhook(webhookPayload('message.bounced', '0192f5a4-7b1c-7d3e-9a2b-4c5d6e7f8a9b', 'user@example.com', [
+        'message_id_header' => '<0192f5a4-0000-7000-8000-000000000000@example.com>',
+    ]))->assertOk();
+
+    expect($stored->fresh()->status)->toBe('bounced');
 });

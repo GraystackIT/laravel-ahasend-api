@@ -6,6 +6,27 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+### Fixed
+- `AhasendService::send()` returns the id the API assigned to the message. It read a top-level
+  `message_id` that the send endpoints have never returned. They answer with
+  `{"object": "list", "data": [{"id": …}, …]}`, one entry per recipient. So every send returned
+  the client-side UUID, which Ahasend never sees, and no webhook could be matched against it. The
+  first recipient's `data[].id` is returned now. The client-side id is used only when the response
+  names none. From 9 November 2026 that id is a bare UUID, the same one message webhooks carry as
+  `data.id`. Before, it was the bracketed Message-ID header, so ids stored across the switch come
+  in both forms. Match old ones by the webhook's `data.message_id_header`, which did not change.
+- A send the API refused for every recipient (`status: error`, `id: null` on each entry) throws
+  an `AhasendException` naming each recipient's error. It used to be logged, stored and announced
+  as sent. A refusal of only some recipients is logged as a warning.
+- The database storage driver's status updates also match by `data.message_id_header`, so a
+  message this version stored before the id switch picks up its events after it. Rows written by
+  0.3.0 and earlier hold the client-side UUID, which no webhook names. They stay as they are.
+
+### Added
+- `MailSent::$recipientMessageIds`: Ahasend's id for every accepted recipient, keyed by
+  address. Each recipient is a message of its own with its own webhooks. The database storage
+  driver stores one row per recipient for the same reason.
+
 ## [0.3.0] - 2026-10-13
 
 ### Added
